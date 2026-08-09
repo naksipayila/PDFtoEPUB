@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-to-epub"
+version = "0.1.0"
+description = "Offline, layout-aware PDF to EPUB 3 desktop converter"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.7",
+    "PyMuPDF>=1.24",
+    "Pillow>=10.3",
+    "pytesseract>=0.3.10",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2", "ruff>=0.5"]
+
+[project.scripts]
+pdf-to-epub = "app.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = ["build", "dist", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "UP040"]
+
+[tool.setuptools]
+packages = ["app", "app.core", "app.pdf", "app.layout", "app.epub", "app.ocr", "app.gui", "app.gui.workers"]

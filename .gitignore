@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.spec.tmp
+*.epub
+*.pdf
+*.lnk
+pdf_to_epub.log
+debug/
