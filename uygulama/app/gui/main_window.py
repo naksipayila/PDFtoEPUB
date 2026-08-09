@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self._settings = QSettings("PDFtoEPUB", "PDFtoEPUB")
         self._worker: ConversionWorker | None = None
         self._last_output: Path | None = None
-        self.setWindowTitle("PDF'den EPUB'e Dönüştürücü")
+        self.setWindowTitle("PDF to EPUB Converter")
         self.setMinimumSize(720, 460)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self.setAcceptDrops(True)
