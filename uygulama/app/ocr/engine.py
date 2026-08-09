@@ -52,7 +52,7 @@ class OcrEngine:
 
         result: list[SourceTextBlock] = []
         for line_index, indexes in enumerate(lines.values()):
-            text = normalize_text(" ".join(ocr_data["text"][index] for index in indexes))
+            text = _join_ocr_words(ocr_data, indexes)
             if not text:
                 continue
             x0 = min(ocr_data["left"][index] for index in indexes) / scale
@@ -87,3 +87,34 @@ class OcrEngine:
     def _preprocess(image: Image.Image) -> Image.Image:
         grayscale = ImageOps.grayscale(image)
         return ImageEnhance.Contrast(grayscale).enhance(1.5)
+
+
+def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:
+    """Join OCR tokens using their visual gap instead of forcing a space everywhere."""
+    ordered = sorted(indexes, key=lambda index: (ocr_data["left"][index], index))
+    tokens = [
+        (
+            normalize_text(ocr_data["text"][index]),
+            float(ocr_data["left"][index]),
+            float(ocr_data["left"][index] + ocr_data["width"][index]),
+            float(ocr_data["height"][index]),
+        )
+        for index in ordered
+    ]
+    tokens = [token for token in tokens if token[0]]
+    if not tokens:
+        return ""
+
+    line_height = max(token[3] for token in tokens)
+    join_limit = max(1.0, line_height * 0.12)
+
+    text = tokens[0][0]
+    for previous, current in zip(tokens, tokens[1:], strict=False):
+        previous_text = previous[0]
+        current_text = current[0]
+        gap = max(0.0, current[1] - previous[2])
+        needs_space = gap > join_limit
+        if previous_text[-1:] in "([{\"'“‘" or current_text[:1] in ".,;:!?)]}%»”’":
+            needs_space = False
+        text += (" " if needs_space else "") + current_text
+    return normalize_text(text)

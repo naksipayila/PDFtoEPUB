@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from statistics import median
 
 import pymupdf as fitz
 
@@ -53,17 +54,17 @@ class PageParser:
     @staticmethod
     def _extract_text(page: fitz.Page, page_number: int) -> list[SourceTextBlock]:
         result: list[SourceTextBlock] = []
-        page_dict = page.get_text("dict", flags=fitz.TEXTFLAGS_DICT)
+        page_dict = page.get_text("rawdict", flags=fitz.TEXTFLAGS_RAWDICT)
         for block_index, block in enumerate(page_dict.get("blocks", [])):
             if block.get("type") != 0:
                 continue
             for line_index, line in enumerate(block.get("lines", [])):
                 spans = line.get("spans", [])
-                text = normalize_text("".join(span.get("text", "") for span in spans))
+                text = _line_text(line)
                 if not text or not spans:
                     continue
                 bbox = BoundingBox(*line["bbox"])
-                primary_span = max(spans, key=lambda item: len(item.get("text", "")))
+                primary_span = max(spans, key=_span_length)
                 font_name = str(primary_span.get("font", "Unknown"))
                 flags = int(primary_span.get("flags", 0))
                 result.append(
@@ -82,3 +83,42 @@ class PageParser:
                     )
                 )
         return result
+
+
+def _span_length(span: dict) -> int:
+    return len(span.get("text", "")) or len(span.get("chars", []))
+
+
+def _line_text(line: dict) -> str:
+    """Rebuild native text from character geometry without inventing word gaps."""
+    spans = line.get("spans", [])
+    chars = [char for span in spans for char in span.get("chars", [])]
+    if not chars:
+        return normalize_text("".join(span.get("text", "") for span in spans))
+
+    space_widths = [
+        char["bbox"][2] - char["bbox"][0]
+        for char in chars
+        if char.get("c", "").isspace() and "bbox" in char
+    ]
+    font_size = max((float(span.get("size", 10.0)) for span in spans), default=10.0)
+    space_width = median(space_widths) if space_widths else font_size * 0.25
+    gap_threshold = max(0.5, space_width * 0.6)
+
+    result: list[str] = []
+    previous = None
+    for char in chars:
+        value = str(char.get("c", ""))
+        if not value:
+            continue
+        bbox = char.get("bbox")
+        if value.isspace():
+            result.append(" ")
+        elif previous is not None and bbox is not None:
+            gap = bbox[0] - previous[2]
+            if gap > gap_threshold:
+                result.append(" ")
+        result.append(value)
+        if bbox is not None:
+            previous = bbox
+    return normalize_text("".join(result))

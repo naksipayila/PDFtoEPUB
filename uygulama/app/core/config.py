@@ -50,6 +50,6 @@ class ParagraphMergeConfig:
 
 @dataclass(frozen=True, slots=True)
 class HeaderFooterConfig:
-    edge_ratio: float = 0.14
+    edge_ratio: float = 0.145
     minimum_repeated_pages: int = 2
     minimum_frequency: float = 0.6
