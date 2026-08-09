@@ -1,4 +1,4 @@
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $venvRoot = Join-Path $projectRoot ".venv"
@@ -42,10 +42,27 @@ if (Test-Ready) {
 }
 
 $wtCommand = Get-Command wt.exe -ErrorAction SilentlyContinue
-if (-not $wtCommand) {
-    exit 1
-}
-
 $terminalScript = Join-Path $projectRoot "baslat-terminal.ps1"
 $terminalArguments = '-d "' + $projectRoot + '" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $terminalScript + '"'
-Start-Process -FilePath $wtCommand.Source -WorkingDirectory $projectRoot -ArgumentList $terminalArguments
+
+if ($wtCommand) {
+    try {
+        Start-Process -FilePath $wtCommand.Source -WorkingDirectory $projectRoot -ArgumentList $terminalArguments -ErrorAction Stop
+        exit 0
+    } catch {
+        # Fall back to the Windows PowerShell console when Terminal is unavailable.
+    }
+}
+
+$windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
+    throw "Windows PowerShell bulunamadi. Kurulum baslatilamiyor."
+}
+Start-Process -FilePath $windowsPowerShell -WorkingDirectory $projectRoot -ArgumentList @(
+    "-NoLogo",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    $terminalScript
+) -WindowStyle Normal -ErrorAction Stop
