@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -130,11 +129,6 @@ class MainWindow(QMainWindow):
         input_layout.addWidget(QLabel("PDF dosyası"), 0, 0)
         input_layout.addWidget(self.input_edit, 0, 1)
         input_layout.addWidget(browse_input, 0, 2)
-        input_layout.addWidget(QLabel("Parola"), 1, 0)
-        self.password_edit = QLineEdit()
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password_edit.setPlaceholderText("Yalnızca şifreli PDF'ler için")
-        input_layout.addWidget(self.password_edit, 1, 1, 1, 2)
         layout.addWidget(input_group)
 
         output_group = QGroupBox("Çıktı")
@@ -204,33 +198,15 @@ class MainWindow(QMainWindow):
         self.css_style = QComboBox()
         self.css_style.addItem("Okuyucu", "reader")
         self.css_style.addItem("Kompakt", "compact")
-        theme_label = QLabel("Tema")
-        self.theme = QComboBox()
-        self.theme.addItem("Sistem", "system")
-        self.theme.addItem("Açık", "light")
-        self.theme.addItem("Koyu", "dark")
         control_row = len(checkboxes) // 2
         for row, label, combo in (
             (control_row, language_label, self.ocr_language),
             (control_row + 1, style_label, self.css_style),
-            (control_row + 2, theme_label, self.theme),
         ):
             options_layout.addWidget(label, row, 0)
             options_layout.addWidget(combo, row, 1)
-        self.theme.currentIndexChanged.connect(self._on_theme_changed)
         layout.addWidget(options_group)
 
-        help_box = QFrame()
-        help_box.setObjectName("helpBox")
-        help_layout = QVBoxLayout(help_box)
-        help_layout.addWidget(QLabel("Yerleşim duyarlı dönüşüm"))
-        help_layout.addWidget(
-            _word_wrapped_label(
-                "Metin, başlıklar, sütunlar, tekrarlanan kenar içerikleri, görseller, listeler, "
-                "altyazılar ve basit tablolar EPUB oluşturulmadan önce yerel olarak yorumlanır."
-            )
-        )
-        layout.addWidget(help_box)
         return container
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
@@ -282,7 +258,7 @@ class MainWindow(QMainWindow):
         if not path.is_file() or path.suffix.lower() != ".pdf":
             return
         try:
-            with PdfReader(path, self.password_edit.text() or None) as reader:
+            with PdfReader(path) as reader:
                 metadata = reader.metadata
         except ConversionError:
             return
@@ -322,7 +298,6 @@ class MainWindow(QMainWindow):
             **{name: checkbox.isChecked() for name, checkbox in self.option_checks.items()},
             ocr_language=str(self.ocr_language.currentData()),
             css_style_mode=str(self.css_style.currentData()),
-            pdf_password=self.password_edit.text() or None,
         )
 
     def _cancel_conversion(self) -> None:
@@ -392,11 +367,6 @@ class MainWindow(QMainWindow):
             saved = self._settings.value(f"option/{name}")
             if saved is not None:
                 checkbox.setChecked(str(saved).lower() in {"true", "1"})
-        saved_theme = str(self._settings.value("theme", "system"))
-        theme_key = {"System": "system", "Light": "light", "Dark": "dark"}.get(
-            saved_theme, saved_theme
-        )
-        self.theme.setCurrentIndex(max(0, self.theme.findData(theme_key)))
         geometry = self._settings.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
@@ -406,7 +376,7 @@ class MainWindow(QMainWindow):
             max(self.minimumWidth(), min(self.width(), self._DEFAULT_WIDTH)),
             max(self.minimumHeight(), min(self.height(), self._DEFAULT_HEIGHT)),
         )
-        self._apply_theme(str(self.theme.currentData()))
+        self._apply_theme()
         self._center_on_screen()
 
     def _center_on_screen(self) -> None:
@@ -430,19 +400,10 @@ class MainWindow(QMainWindow):
         self._settings.setValue("ocr_language", self.ocr_language.currentData())
         for name, checkbox in self.option_checks.items():
             self._settings.setValue(f"option/{name}", checkbox.isChecked())
-        self._settings.setValue("theme", self.theme.currentData())
         self._settings.setValue("geometry", self.saveGeometry())
 
-    def _on_theme_changed(self, _index: int) -> None:
-        self._apply_theme(str(self.theme.currentData()))
-
-    def _apply_theme(self, name: str) -> None:
-        if name == "dark":
-            self.setStyleSheet(_DARK_STYLE)
-        elif name == "light":
-            self.setStyleSheet(_LIGHT_STYLE)
-        else:
-            self.setStyleSheet(_SYSTEM_STYLE)
+    def _apply_theme(self) -> None:
+        self.setStyleSheet(_DARK_STYLE)
 
     def _update_responsive_layout(self) -> None:
         direction = (
@@ -459,36 +420,19 @@ def _safe_filename(value: str) -> str:
     return cleaned or "book"
 
 
-def _word_wrapped_label(text: str) -> QLabel:
-    label = QLabel(text)
-    label.setWordWrap(True)
-    return label
-
-
-_SYSTEM_STYLE = """
+_COMMON_STYLE = """
 QLabel#appTitle { font-size: 22px; font-weight: 700; }
 QLabel#appSubtitle { color: palette(mid); margin-bottom: 2px; }
 QLabel#flowStep { padding: 2px 0; }
-QFrame#helpBox { border: 1px solid palette(midlight); border-radius: 6px; }
 QPushButton#convertButton { font-weight: 700; padding: 7px 16px; }
 """
-_LIGHT_STYLE = (
-    _SYSTEM_STYLE
-    + """
-QMainWindow { background: #f6f7f9; }
-QGroupBox { background: white; border: 1px solid #d6d9df; border-radius: 6px; margin-top: 7px; padding: 6px; }
-QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; font-weight: 600; }
-QPushButton#convertButton { background: #1769aa; color: white; border: 0; border-radius: 6px; }
-"""
-)
 _DARK_STYLE = (
-    _SYSTEM_STYLE
+    _COMMON_STYLE
     + """
 QMainWindow, QWidget { background: #20242a; color: #e8eaed; }
 QGroupBox { border: 1px solid #4e5661; border-radius: 6px; margin-top: 7px; padding: 6px; }
 QLineEdit, QPlainTextEdit, QComboBox { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
 QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 5px; }
 QPushButton#convertButton { background: #2f81c1; color: white; border: 0; border-radius: 6px; }
-QFrame#helpBox { border-color: #58616d; }
 """
 )
