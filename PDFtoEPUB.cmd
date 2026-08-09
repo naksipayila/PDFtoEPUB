@@ -21,21 +21,24 @@ if errorlevel 1 goto :fail
 
 set "SOURCE_ROOT="
 for /d %%D in ("%SOURCE_ARCHIVE_ROOT%\PDFtoEPUB-*") do (
-    if exist "%%~fD\PDFtoEPUBLauncher.exe" set "SOURCE_ROOT=%%~fD"
+    if exist "%%~fD\uygulama\baslat-sessiz.vbs" set "SOURCE_ROOT=%%~fD"
 )
 if not defined SOURCE_ROOT goto :fail
 
 if not exist "%APP_ROOT%" mkdir "%APP_ROOT%" >nul 2>&1
 if not exist "%APP_ROOT%" goto :fail
 
-copy /Y "%SOURCE_ROOT%\PDFtoEPUBLauncher.exe" "%APP_ROOT%\PDFtoEPUBLauncher.exe" >nul
-if errorlevel 1 goto :fail
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%SOURCE_ROOT%\uygulama\ortala-konsol.ps1" >nul 2>&1
 
 robocopy "%SOURCE_ROOT%\uygulama" "%APP_ROOT%\uygulama" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto :fail
 
 echo Uygulama baslatiliyor...
-start "" /wait "%APP_ROOT%\PDFtoEPUBLauncher.exe"
+set "WSCRIPT_PATH=%WINDIR%\System32\wscript.exe"
+set "SILENT_SCRIPT=%APP_ROOT%\uygulama\baslat-sessiz.vbs"
+if not exist "%WSCRIPT_PATH%" goto :fail
+if not exist "%SILENT_SCRIPT%" goto :fail
+start "" /wait "%WSCRIPT_PATH%" "%SILENT_SCRIPT%"
 set "LAUNCH_ERROR=%ERRORLEVEL%"
 call :cleanup
 if not "%LAUNCH_ERROR%"=="0" goto :fail_after_cleanup

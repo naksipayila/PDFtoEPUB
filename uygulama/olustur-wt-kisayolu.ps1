@@ -4,7 +4,8 @@ $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dispatcherPath = Join-Path $projectRoot "baslat-dispatch.ps1"
 $silentLauncherPath = Join-Path $projectRoot "baslat-sessiz.vbs"
 $distributionRoot = Split-Path -Parent $projectRoot
-$portableLauncherPath = Join-Path $distributionRoot "PDFtoEPUBLauncher.exe"
+$wscriptPath = Join-Path $env:WINDIR "System32\wscript.exe"
+$iconPath = Join-Path $projectRoot "assets\pdf-to-epub.ico"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPaths = @(
     (Join-Path $desktopPath "PDF to EPUB.lnk")
@@ -16,8 +17,11 @@ if (-not (Test-Path -LiteralPath $dispatcherPath)) {
 if (-not (Test-Path -LiteralPath $silentLauncherPath)) {
     throw "baslat-sessiz.vbs bulunamadi: $silentLauncherPath"
 }
-if (-not (Test-Path -LiteralPath $portableLauncherPath)) {
-    throw "Portable launcher bulunamadi: $portableLauncherPath"
+if (-not (Test-Path -LiteralPath $wscriptPath)) {
+    throw "wscript.exe bulunamadi: $wscriptPath"
+}
+if (-not (Test-Path -LiteralPath $iconPath)) {
+    throw "Simge bulunamadi: $iconPath"
 }
 
 $shortcutInterop = @'
@@ -70,6 +74,7 @@ namespace PDFtoEPUB {
         public static void Save(
             string shortcutPath,
             string targetPath,
+            string arguments,
             string workingDirectory,
             string iconPath,
             string description
@@ -78,7 +83,7 @@ namespace PDFtoEPUB {
                 Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"))
             );
             link.SetPath(targetPath);
-            link.SetArguments("");
+            link.SetArguments(arguments);
             link.SetWorkingDirectory(workingDirectory);
             link.SetDescription(description);
             link.SetShowCmd(1);
@@ -102,9 +107,10 @@ $description = "PDFtoEPUB uygulamasini baslatir"
 foreach ($shortcutPath in $shortcutPaths) {
     [PDFtoEPUB.ShortcutFactory]::Save(
         $shortcutPath,
-        $portableLauncherPath,
-        $projectRoot,
-        $portableLauncherPath,
+        $wscriptPath,
+        ('"' + $silentLauncherPath + '"'),
+        $distributionRoot,
+        $iconPath,
         $description
     )
     Write-Host "Kisayol olusturuldu: $shortcutPath"
