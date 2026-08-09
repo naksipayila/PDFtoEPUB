@@ -96,13 +96,21 @@ The integration test creates a multi-page PDF containing headings, a paragraph s
 ## Running On Another Windows Computer
 
 The repository includes a self-installing Windows launcher. Copy the complete
-project folder to the other computer and double-click `baslat.cmd`.
+project folder to the other computer.
+
+To create a desktop shortcut that uses Windows Terminal, double-click
+`kur-wt-kisayolu.cmd` once. It creates `PDFtoEPUB (Windows Terminal).lnk` on the
+desktop. Use that shortcut for later launches.
 
 The launcher keeps the terminal visible while it prepares the environment:
 
 ```powershell
 baslat.cmd
 ```
+
+The desktop shortcut starts the same `baslat.ps1` script through `wt.exe` and
+keeps the Windows Terminal tab open after the GUI starts. Windows Terminal must
+be installed on the computer.
 
 If Python is missing, it downloads and installs a private Python runtime under
 `.runtime`. It then creates `.venv`, installs the packages in
