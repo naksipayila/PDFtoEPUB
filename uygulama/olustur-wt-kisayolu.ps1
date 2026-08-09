@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dispatcherPath = Join-Path $projectRoot "baslat-dispatch.ps1"
+$silentLauncherPath = Join-Path $projectRoot "baslat-sessiz.vbs"
 $distributionRoot = Split-Path -Parent $projectRoot
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPaths = @(
@@ -11,6 +12,9 @@ $shortcutPaths = @(
 
 if (-not (Test-Path -LiteralPath $dispatcherPath)) {
     throw "baslat-dispatch.ps1 bulunamadi: $dispatcherPath"
+}
+if (-not (Test-Path -LiteralPath $silentLauncherPath)) {
+    throw "baslat-sessiz.vbs bulunamadi: $silentLauncherPath"
 }
 
 $wtPath = $null
@@ -50,11 +54,11 @@ if (-not (Test-Path -LiteralPath $iconPath)) {
 }
 
 $shell = New-Object -ComObject WScript.Shell
-$powershellPath = (Get-Command powershell.exe -ErrorAction Stop).Source
+$wscriptPath = Join-Path $env:WINDIR "System32\wscript.exe"
 foreach ($shortcutPath in $shortcutPaths) {
     $shortcut = $shell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = $powershellPath
-    $shortcut.Arguments = '-NoLogo -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $dispatcherPath + '"'
+    $shortcut.TargetPath = $wscriptPath
+    $shortcut.Arguments = '"' + $silentLauncherPath + '"'
     $shortcut.WorkingDirectory = $projectRoot
     $shortcut.Description = "PDFtoEPUB uygulamasini Windows Terminal ile baslatir"
     $shortcut.IconLocation = "$iconPath,0"
