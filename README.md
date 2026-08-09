@@ -70,7 +70,7 @@ Use `python -m app.cli --help` for all CLI options.
 ## Tesseract OCR
 
 When using the development commands directly, install Tesseract separately.
-The `baslat.cmd` launcher handles this automatically.
+The Windows Terminal shortcut launcher handles this automatically.
 
 Windows installation example:
 
@@ -98,15 +98,10 @@ The integration test creates a multi-page PDF containing headings, a paragraph s
 The repository includes a self-installing Windows launcher. Copy the complete
 project folder to the other computer.
 
-To create a desktop shortcut that uses Windows Terminal, double-click
-`kur-wt-kisayolu.cmd` once. It creates `PDFtoEPUB (Windows Terminal).lnk` on the
-desktop. Use that shortcut for later launches.
-
-The launcher keeps the terminal visible while it prepares the environment:
-
-```powershell
-baslat.cmd
-```
+To create shortcuts that use Windows Terminal, run
+`olustur-wt-kisayolu.ps1` once from PowerShell. It creates a desktop shortcut
+and `PDFtoEPUB-WindowsTerminal.lnk` in the project folder. Use either shortcut
+for later launches.
 
 The desktop shortcut starts the same `baslat.ps1` script through `wt.exe` and
 keeps the Windows Terminal tab open after the GUI starts. Windows Terminal must

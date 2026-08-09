@@ -3,7 +3,10 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $launcherPath = Join-Path $projectRoot "baslat.ps1"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopPath "PDFtoEPUB (Windows Terminal).lnk"
+$shortcutPaths = @(
+    (Join-Path $desktopPath "PDFtoEPUB (Windows Terminal).lnk")
+    (Join-Path $projectRoot "PDFtoEPUB-WindowsTerminal.lnk")
+)
 
 if (-not (Test-Path -LiteralPath $launcherPath)) {
     throw "baslat.ps1 bulunamadi: $launcherPath"
@@ -30,14 +33,27 @@ if (-not $wtPath) {
     throw "Windows Terminal (wt.exe) bulunamadi. Once Windows Terminal'i kurun."
 }
 
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $wtPath
-$shortcut.Arguments = '-d "' + $projectRoot + '" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -File "' + $launcherPath + '"'
-$shortcut.WorkingDirectory = $projectRoot
-$shortcut.Description = "PDFtoEPUB uygulamasini Windows Terminal ile baslatir"
-$shortcut.IconLocation = "$wtPath,0"
-$shortcut.WindowStyle = 1
-$shortcut.Save()
+$iconPath = $wtPath
+$terminalPackage = Get-AppxPackage -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like "Microsoft.WindowsTerminal*" } |
+    Sort-Object Version -Descending |
+    Select-Object -First 1
+if ($terminalPackage) {
+    $packageIcon = Join-Path $terminalPackage.InstallLocation "Images\terminal_contrast-black.ico"
+    if (Test-Path -LiteralPath $packageIcon) {
+        $iconPath = $packageIcon
+    }
+}
 
-Write-Host "Kisayol olusturuldu: $shortcutPath"
+$shell = New-Object -ComObject WScript.Shell
+foreach ($shortcutPath in $shortcutPaths) {
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $wtPath
+    $shortcut.Arguments = '-d "' + $projectRoot + '" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -File "' + $launcherPath + '"'
+    $shortcut.WorkingDirectory = $projectRoot
+    $shortcut.Description = "PDFtoEPUB uygulamasini Windows Terminal ile baslatir"
+    $shortcut.IconLocation = "$iconPath,0"
+    $shortcut.WindowStyle = 1
+    $shortcut.Save()
+    Write-Host "Kisayol olusturuldu: $shortcutPath"
+}
