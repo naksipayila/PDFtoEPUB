@@ -5,7 +5,7 @@ $runtimeRoot = Join-Path $projectRoot ".runtime"
 $venvRoot = Join-Path $projectRoot ".venv"
 $requirements = Join-Path $projectRoot "runtime-requirements.txt"
 $pythonVersion = "3.12.10"
-$pythonInstallerUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-amd64.exe"
+$pythonPackageUrl = "https://api.nuget.org/v3-flatcontainer/python/$pythonVersion/python.$pythonVersion.nupkg"
 $tesseractInstallerUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
 $turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/tur.traineddata"
 $ProgressPreference = "Continue"
@@ -94,6 +94,16 @@ function Invoke-Checked {
     }
 }
 
+function Expand-ZipArchive {
+    param(
+        [string]$ArchivePath,
+        [string]$DestinationPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory($ArchivePath, $DestinationPath)
+}
+
 function Get-PythonVersion {
     param([string]$PythonPath)
 
@@ -178,10 +188,10 @@ function Find-UsablePython {
 
 function Install-LocalPython {
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
-    $installer = Join-Path $runtimeRoot "python-installer.exe"
-    if (-not (Test-Path -LiteralPath $installer)) {
-        Write-Host "Python bulunamadi. Python $pythonVersion indiriliyor..."
-        Download-WithProgress $pythonInstallerUrl $installer "Python indiriliyor"
+    $pythonPackage = Join-Path $runtimeRoot "python-package.zip"
+    if (-not (Test-Path -LiteralPath $pythonPackage)) {
+        Write-Host "Python bulunamadi. Python $pythonVersion paketi indiriliyor..."
+        Download-WithProgress $pythonPackageUrl $pythonPackage "Python paketi indiriliyor"
     }
 
     $pythonDirectory = Join-Path $runtimeRoot "python"
@@ -193,33 +203,37 @@ function Install-LocalPython {
         }
     }
 
-    $installLog = Join-Path $runtimeRoot "python-install.log"
-    Write-Host "Python yerel klasore kuruluyor..."
-    $arguments = @(
-        "/quiet",
-        "/log",
-        "`"$installLog`"",
-        "InstallAllUsers=0",
-        "TargetDir=`"$pythonDirectory`"",
-        "PrependPath=0",
-        "Include_launcher=0",
-        "Include_pip=1",
-        "Include_test=0",
-        "Include_exe=1",
-        "Include_lib=1",
-        "Include_dev=1",
-        "Include_tcltk=0",
-        "Include_doc=0",
-        "Include_tools=0",
-        "SimpleInstall=0"
-    )
-    $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
-    if (($process.ExitCode -ne 0) -and ($process.ExitCode -ne 3010)) {
-        throw "Python kurulumu basarisiz oldu. Cikis kodu: $($process.ExitCode)"
+    $extractRoot = Join-Path $runtimeRoot "python-package"
+    if (Test-Path -LiteralPath $extractRoot) {
+        Remove-Item -LiteralPath $extractRoot -Recurse -Force
     }
+    New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
+
+    try {
+        Write-Host "Python yerel klasore cikariliyor..."
+        Expand-ZipArchive $pythonPackage $extractRoot
+        $toolsRoot = Join-Path $extractRoot "tools"
+        if (-not (Test-Path -LiteralPath (Join-Path $toolsRoot "python.exe"))) {
+            throw "Python paketi beklenen python.exe dosyasini icermiyor."
+        }
+        New-Item -ItemType Directory -Path $pythonDirectory -Force | Out-Null
+        foreach ($item in Get-ChildItem -LiteralPath $toolsRoot) {
+            Move-Item -LiteralPath $item.FullName -Destination $pythonDirectory -Force
+        }
+    } catch {
+        if (Test-Path -LiteralPath $pythonPackage) {
+            Remove-Item -LiteralPath $pythonPackage -Force
+        }
+        throw
+    } finally {
+        if (Test-Path -LiteralPath $extractRoot) {
+            Remove-Item -LiteralPath $extractRoot -Recurse -Force
+        }
+    }
+
     $localPython = Find-UsablePython
     if (-not $localPython) {
-        throw "Python kurulumu tamamlandi ancak python.exe bulunamadi. Kurulum gunlugu: $installLog"
+        throw "Python paketi cikarildi ancak kullanilabilir python.exe bulunamadi."
     }
     return $localPython
 }
