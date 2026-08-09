@@ -69,7 +69,8 @@ Use `python -m app.cli --help` for all CLI options.
 
 ## Tesseract OCR
 
-Install Tesseract separately, then ensure its executable is on `PATH`.
+When using the development commands directly, install Tesseract separately.
+The `baslat.cmd` launcher handles this automatically.
 
 Windows installation example:
 
@@ -92,24 +93,22 @@ python run.py --smoke-test
 
 The integration test creates a multi-page PDF containing headings, a paragraph split over visual lines, repeated headers, page numbers, and an image. It converts it and verifies the EPUB archive structure plus internal validation.
 
-## Packaging For Windows
+## Running On Another Windows Computer
 
-The repository includes a one-folder Windows build flow. It bundles Python, Qt,
-PyMuPDF, Pillow, pytesseract, and the application, so the resulting folder can
-be copied to another Windows computer without installing Python or any
-application dependency there.
+The repository includes a self-installing Windows launcher. Copy the complete
+project folder to the other computer and double-click `baslat.cmd`.
 
-On the build computer, double-click `build_portable.cmd` or run:
+The launcher keeps the terminal visible while it prepares the environment:
 
 ```powershell
-.\build_portable.ps1
+baslat.cmd
 ```
 
-The script installs the build dependencies automatically, creates
-`portable\PDFtoEPUB`, and includes Tesseract when it is available on the build
-computer. Copy that complete folder and double-click `PDFtoEPUB.exe` on the
-other computer. The application is designed so PDF parsing, layout analysis,
-and EPUB construction do not depend on the GUI.
+If Python is missing, it downloads and installs a private Python runtime under
+`.runtime`. It then creates `.venv`, installs the packages in
+`runtime-requirements.txt` when needed, and opens the GUI with `pythonw.exe`.
+No system-wide Python or pip setup is required. The first run requires an
+internet connection; later runs use the local environment and start directly.
 
 ## Architecture
 
