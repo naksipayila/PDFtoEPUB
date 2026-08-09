@@ -10,7 +10,6 @@ from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApp
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
-    QComboBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -190,21 +189,6 @@ class MainWindow(QMainWindow):
             options_layout.addWidget(checkbox, index // 2, index % 2)
         options_layout.setColumnStretch(0, 1)
         options_layout.setColumnStretch(1, 1)
-
-        language_label = QLabel("OCR dili")
-        self.ocr_language = QComboBox()
-        self.ocr_language.addItem("Türkçe", "tur")
-        style_label = QLabel("EPUB görünümü")
-        self.css_style = QComboBox()
-        self.css_style.addItem("Okuyucu", "reader")
-        self.css_style.addItem("Kompakt", "compact")
-        control_row = len(checkboxes) // 2
-        for row, label, combo in (
-            (control_row, language_label, self.ocr_language),
-            (control_row + 1, style_label, self.css_style),
-        ):
-            options_layout.addWidget(label, row, 0)
-            options_layout.addWidget(combo, row, 1)
         layout.addWidget(options_group)
 
         return container
@@ -296,8 +280,8 @@ class MainWindow(QMainWindow):
     def _options(self) -> ConversionOptions:
         return ConversionOptions(
             **{name: checkbox.isChecked() for name, checkbox in self.option_checks.items()},
-            ocr_language=str(self.ocr_language.currentData()),
-            css_style_mode=str(self.css_style.currentData()),
+            ocr_language="tur",
+            css_style_mode="reader",
         )
 
     def _cancel_conversion(self) -> None:
@@ -362,7 +346,6 @@ class MainWindow(QMainWindow):
 
     def _restore_settings(self) -> None:
         self.output_directory_edit.setText(str(self._settings.value("last_output_dir", "")))
-        self.ocr_language.setCurrentIndex(0)
         for name, checkbox in self.option_checks.items():
             saved = self._settings.value(f"option/{name}")
             if saved is not None:
@@ -397,7 +380,6 @@ class MainWindow(QMainWindow):
         if input_path.is_file():
             self._settings.setValue("last_input_dir", str(input_path.parent))
         self._settings.setValue("last_output_dir", self.output_directory_edit.text())
-        self._settings.setValue("ocr_language", self.ocr_language.currentData())
         for name, checkbox in self.option_checks.items():
             self._settings.setValue(f"option/{name}", checkbox.isChecked())
         self._settings.setValue("geometry", self.saveGeometry())
