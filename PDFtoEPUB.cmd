@@ -32,6 +32,8 @@ powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%SOURCE_ROOT%\u
 
 robocopy "%SOURCE_ROOT%\uygulama" "%APP_ROOT%\uygulama" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto :fail
+if exist "%APP_ROOT%\PDFtoEPUBLauncher.exe" del /f /q "%APP_ROOT%\PDFtoEPUBLauncher.exe" >nul 2>&1
+if exist "%APP_ROOT%\uygulama\launcher" rmdir /s /q "%APP_ROOT%\uygulama\launcher" >nul 2>&1
 
 echo Uygulama baslatiliyor...
 set "WSCRIPT_PATH=%WINDIR%\System32\wscript.exe"
