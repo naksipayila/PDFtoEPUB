@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 
 import pymupdf as fitz
 from PIL import Image, ImageEnhance, ImageOps
 
 from app.core.models import BoundingBox, SourceTextBlock
 from app.core.normalizer import normalize_text
+from app.runtime import bundled_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,9 +21,7 @@ class OcrEngine:
 
     def available(self) -> bool:
         try:
-            import pytesseract
-
-            pytesseract.get_tesseract_version()
+            self._tesseract().get_tesseract_version()
         except (ImportError, OSError, RuntimeError):
             return False
         return True
@@ -30,7 +30,7 @@ class OcrEngine:
         self, page: fitz.Page, page_number: int, language: str
     ) -> list[SourceTextBlock]:
         """Render and OCR a page, returning conservative line-level blocks."""
-        import pytesseract
+        pytesseract = self._tesseract()
 
         pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
         image = Image.open(io.BytesIO(pixmap.tobytes("png")))
@@ -78,6 +78,16 @@ class OcrEngine:
             )
         LOGGER.info("OCR extracted %s lines from page %s", len(result), page_number)
         return result
+
+    @staticmethod
+    def _tesseract():
+        import pytesseract
+
+        bundled_executable = bundled_path("tesseract", "tesseract.exe")
+        if bundled_executable.is_file():
+            pytesseract.pytesseract.tesseract_cmd = str(bundled_executable)
+            os.environ.setdefault("TESSDATA_PREFIX", str(bundled_executable.parent))
+        return pytesseract
 
     @staticmethod
     def _preprocess(image: Image.Image) -> Image.Image:

@@ -4,7 +4,7 @@ Offline, layout-aware desktop application that converts PDFs to reflowable EPUB 
 
 ## Features
 
-- PySide6 desktop UI with drag and drop, progress, logs, cancellation, saved settings, metadata editing, and System/Light/Dark themes.
+- PySide6 desktop UI with drag and drop, progress, logs, cancellation, saved settings, and System/Light/Dark themes.
 - CLI and GUI share the same conversion service.
 - Coordinate-preserving PyMuPDF extraction for text spans, font information, page geometry, metadata, and embedded images.
 - Semantic intermediate document model, independent of PDF and EPUB layers.
@@ -17,7 +17,7 @@ Offline, layout-aware desktop application that converts PDFs to reflowable EPUB 
 - Validated EPUB 3 archive with XHTML chapters, navigation, stylesheet, metadata, cover support, and manifest/spine checks.
 - Debug export of page block data as JSON.
 
-## Requirements
+## Requirements (development)
 
 - Python 3.12 or later
 - Windows, macOS, or Linux
@@ -42,7 +42,7 @@ Run the desktop application:
 python run.py
 ```
 
-Drag a PDF into the input field or choose one, set an output folder, review metadata/options, then select **Convert to EPUB**.
+Drag a PDF into the input field or choose one, set an output folder, review options, then select **Convert to EPUB**.
 
 ## CLI
 
@@ -94,13 +94,22 @@ The integration test creates a multi-page PDF containing headings, a paragraph s
 
 ## Packaging For Windows
 
-Install PyInstaller in the build environment, then run:
+The repository includes a one-folder Windows build flow. It bundles Python, Qt,
+PyMuPDF, Pillow, pytesseract, and the application, so the resulting folder can
+be copied to another Windows computer without installing Python or any
+application dependency there.
+
+On the build computer, double-click `build_portable.cmd` or run:
 
 ```powershell
-pyinstaller pdf_to_epub.spec
+.\build_portable.ps1
 ```
 
-The application is designed so PDF parsing, layout analysis, and EPUB construction do not depend on the GUI. The spec collects PySide6 data files for Windows packaging.
+The script installs the build dependencies automatically, creates
+`portable\PDFtoEPUB`, and includes Tesseract when it is available on the build
+computer. Copy that complete folder and double-click `PDFtoEPUB.exe` on the
+other computer. The application is designed so PDF parsing, layout analysis,
+and EPUB construction do not depend on the GUI.
 
 ## Architecture
 
