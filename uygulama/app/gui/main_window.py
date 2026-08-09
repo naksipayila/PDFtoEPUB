@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -38,8 +38,9 @@ class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
     _NARROW_LAYOUT_BREAKPOINT = 760
-    _DEFAULT_WIDTH = 1120
-    _DEFAULT_HEIGHT = 700
+    _NARROW_MINIMUM_HEIGHT = 620
+    _DEFAULT_WIDTH = 960
+    _DEFAULT_HEIGHT = 480
 
     def __init__(self) -> None:
         super().__init__()
@@ -47,7 +48,7 @@ class MainWindow(QMainWindow):
         self._worker: ConversionWorker | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF'den EPUB'e Dönüştürücü")
-        self.setMinimumSize(760, 600)
+        self.setMinimumSize(720, 460)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self.setAcceptDrops(True)
         self._build_interface()
@@ -61,13 +62,6 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
-        title = QLabel("PDF to EPUB")
-        title.setObjectName("appTitle")
-        subtitle = QLabel("Çevrimdışı, yerleşim duyarlı EPUB 3 dönüşümü")
-        subtitle.setObjectName("appSubtitle")
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-
         self._source_panel = self._create_source_panel()
         self._options_panel = self._create_options_panel()
         self._source_panel.setMinimumWidth(320)
@@ -79,6 +73,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._configuration_layout)
 
         progress_group = QGroupBox("Dönüştürme")
+        progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         progress_layout = QVBoxLayout(progress_group)
         self.status_label = QLabel("Başlamak için bir PDF seçin.")
         self.progress_bar = QProgressBar()
@@ -87,13 +82,13 @@ class MainWindow(QMainWindow):
         self.log_panel = QPlainTextEdit()
         self.log_panel.setReadOnly(True)
         self.log_panel.setMaximumBlockCount(500)
-        self.log_panel.setMinimumHeight(100)
-        self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.log_panel.setFixedHeight(140)
+        self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.log_panel)
-        progress_layout.setStretch(2, 1)
-        layout.addWidget(progress_group, 1)
+        layout.addWidget(progress_group)
+        layout.addStretch(1)
 
         button_row = QHBoxLayout()
         self.open_epub_button = QPushButton("EPUB'ı Aç")
@@ -120,50 +115,27 @@ class MainWindow(QMainWindow):
     def _create_source_panel(self) -> QWidget:
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
         input_group = QGroupBox("Girdi PDF")
         input_layout = QGridLayout(input_group)
         self.input_edit = QLineEdit()
         self.input_edit.setPlaceholderText("PDF dosyasını buraya bırakın veya seçin")
         browse_input = QPushButton("Gözat...")
-        input_layout.addWidget(QLabel("PDF dosyası"), 0, 0)
+        input_label = QLabel("PDF dosyası")
+        input_layout.addWidget(input_label, 0, 0)
         input_layout.addWidget(self.input_edit, 0, 1)
         input_layout.addWidget(browse_input, 0, 2)
         layout.addWidget(input_group)
 
-        output_group = QGroupBox("Çıktı")
-        output_layout = QGridLayout(output_group)
-        self.output_directory_edit = QLineEdit()
-        self.output_name_edit = QLineEdit()
-        output_browse = QPushButton("Gözat...")
-        output_layout.addWidget(QLabel("Klasör"), 0, 0)
-        output_layout.addWidget(self.output_directory_edit, 0, 1)
-        output_layout.addWidget(output_browse, 0, 2)
-        output_layout.addWidget(QLabel("Dosya adı"), 1, 0)
-        output_layout.addWidget(self.output_name_edit, 1, 1, 1, 2)
-        layout.addWidget(output_group)
-
-        flow_group = QGroupBox("Kullanım")
-        flow_layout = QVBoxLayout(flow_group)
-        flow_layout.setSpacing(4)
-        for step in (
-            "1. PDF dosyasını seçin veya sürükleyin.",
-            "2. Çıktı klasörünü ve dosya adını kontrol edin.",
-            "3. Dönüşüm seçeneklerini gözden geçirin.",
-            "4. EPUB'e Dönüştür düğmesine basın.",
-        ):
-            flow_step = QLabel(step)
-            flow_step.setObjectName("flowStep")
-            flow_layout.addWidget(flow_step)
-        layout.addWidget(flow_group)
         browse_input.clicked.connect(self._browse_input)
-        output_browse.clicked.connect(self._browse_output)
-        self.input_edit.editingFinished.connect(self._populate_pdf_metadata)
         return panel
 
     def _create_options_panel(self) -> QWidget:
         container = QWidget()
         layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
         options_group = QGroupBox("Dönüştürme Ayarları")
+        options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         options_layout = QGridLayout(options_group)
         options_layout.setContentsMargins(10, 8, 10, 8)
         options_layout.setHorizontalSpacing(12)
@@ -189,7 +161,7 @@ class MainWindow(QMainWindow):
             options_layout.addWidget(checkbox, index // 2, index % 2)
         options_layout.setColumnStretch(0, 1)
         options_layout.setColumnStretch(1, 1)
-        layout.addWidget(options_group)
+        layout.addWidget(options_group, 0, Qt.AlignmentFlag.AlignTop)
 
         return container
 
@@ -225,51 +197,27 @@ class MainWindow(QMainWindow):
         if selected:
             self._set_input(Path(selected))
 
-    def _browse_output(self) -> None:
-        start = self._settings.value("last_output_dir", str(Path.home()))
-        selected = QFileDialog.getExistingDirectory(self, "Çıktı klasörünü seçin", str(start))
-        if selected:
-            self.output_directory_edit.setText(selected)
-
     def _set_input(self, path: Path) -> None:
         self.input_edit.setText(str(path))
-        self.output_directory_edit.setText(str(path.parent))
-        self.output_name_edit.setText(f"{_safe_filename(path.stem)}.epub")
-        self._populate_pdf_metadata()
-
-    def _populate_pdf_metadata(self) -> None:
-        path = Path(self.input_edit.text().strip())
-        if not path.is_file() or path.suffix.lower() != ".pdf":
-            return
-        try:
-            with PdfReader(path) as reader:
-                metadata = reader.metadata
-        except ConversionError:
-            return
-        if self.output_name_edit.text().strip() in {"", f"{path.stem}.epub"}:
-            self.output_name_edit.setText(f"{_safe_filename(metadata.title)}.epub")
 
     def _start_conversion(self) -> None:
         input_path = Path(self.input_edit.text().strip())
-        output_dir = Path(self.output_directory_edit.text().strip())
-        filename = self.output_name_edit.text().strip()
         if not input_path.is_file() or input_path.suffix.lower() != ".pdf":
             self._show_error("Geçerli bir PDF dosyası seçin.")
             return
-        if not output_dir.is_dir():
-            self._show_error("Geçerli bir çıktı klasörü seçin.")
+        output_dir = _downloads_directory()
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            self._show_error(f"İndirilenler klasörü kullanılamadı: {error}")
             return
-        if not filename:
-            self._show_error("Bir EPUB dosya adı girin.")
-            return
-        output_path = output_dir / (
-            filename if filename.lower().endswith(".epub") else f"{filename}.epub"
-        )
+        output_path = output_dir / _epub_filename(input_path)
         self._last_output = output_path
         self.progress_bar.setValue(0)
         self.log_panel.clear()
         self._set_running(True)
         self._append_log(f"Dönüştürme başlatılıyor: {input_path.name}")
+        self._append_log(f"Çıktı: {output_path}")
         self._worker = ConversionWorker(input_path, output_path, self._options())
         self._worker.progress_changed.connect(self._on_progress)
         self._worker.conversion_succeeded.connect(self._on_success)
@@ -345,7 +293,6 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Dönüştürme hatası", message)
 
     def _restore_settings(self) -> None:
-        self.output_directory_edit.setText(str(self._settings.value("last_output_dir", "")))
         for name, checkbox in self.option_checks.items():
             saved = self._settings.value(f"option/{name}")
             if saved is not None:
@@ -379,7 +326,6 @@ class MainWindow(QMainWindow):
         input_path = Path(self.input_edit.text())
         if input_path.is_file():
             self._settings.setValue("last_input_dir", str(input_path.parent))
-        self._settings.setValue("last_output_dir", self.output_directory_edit.text())
         for name, checkbox in self.option_checks.items():
             self._settings.setValue(f"option/{name}", checkbox.isChecked())
         self._settings.setValue("geometry", self.saveGeometry())
@@ -395,6 +341,11 @@ class MainWindow(QMainWindow):
         )
         if self._configuration_layout.direction() != direction:
             self._configuration_layout.setDirection(direction)
+        self.setMinimumHeight(
+            self._NARROW_MINIMUM_HEIGHT
+            if direction == QBoxLayout.Direction.TopToBottom
+            else 460
+        )
 
 
 def _safe_filename(value: str) -> str:
@@ -402,10 +353,26 @@ def _safe_filename(value: str) -> str:
     return cleaned or "book"
 
 
+def _downloads_directory() -> Path:
+    location = QStandardPaths.writableLocation(
+        QStandardPaths.StandardLocation.DownloadLocation
+    )
+    return Path(location) if location else Path.home() / "Downloads"
+
+
+def _epub_filename(input_path: Path) -> str:
+    title = ""
+    try:
+        with PdfReader(input_path) as reader:
+            title = reader.metadata.title.strip()
+    except ConversionError:
+        pass
+    if not title or title.casefold() == "untitled":
+        title = input_path.stem
+    return f"{_safe_filename(title)}-EPUB.epub"
+
+
 _COMMON_STYLE = """
-QLabel#appTitle { font-size: 22px; font-weight: 700; }
-QLabel#appSubtitle { color: palette(mid); margin-bottom: 2px; }
-QLabel#flowStep { padding: 2px 0; }
 QPushButton#convertButton { font-weight: 700; padding: 7px 16px; }
 """
 _DARK_STYLE = (
