@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -64,8 +65,8 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self._scroll_area.setWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(12)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(8)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
 
         title = QLabel("PDF to EPUB")
@@ -94,11 +95,13 @@ class MainWindow(QMainWindow):
         self.log_panel = QPlainTextEdit()
         self.log_panel.setReadOnly(True)
         self.log_panel.setMaximumBlockCount(500)
-        self.log_panel.setFixedHeight(140)
+        self.log_panel.setMinimumHeight(140)
+        self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.log_panel)
-        layout.addWidget(progress_group)
+        progress_layout.setStretch(2, 1)
+        layout.addWidget(progress_group, 1)
 
         button_row = QHBoxLayout()
         self.open_epub_button = QPushButton("EPUB'ı Aç")
@@ -152,7 +155,19 @@ class MainWindow(QMainWindow):
         output_layout.addWidget(self.output_name_edit, 1, 1, 1, 2)
         layout.addWidget(output_group)
 
-        layout.addStretch()
+        flow_group = QGroupBox("Kullanım")
+        flow_layout = QVBoxLayout(flow_group)
+        flow_layout.setSpacing(4)
+        for step in (
+            "1. PDF dosyasını seçin veya sürükleyin.",
+            "2. Çıktı klasörünü ve dosya adını kontrol edin.",
+            "3. Dönüşüm seçeneklerini gözden geçirin.",
+            "4. EPUB'e Dönüştür düğmesine basın.",
+        ):
+            flow_step = QLabel(step)
+            flow_step.setObjectName("flowStep")
+            flow_layout.addWidget(flow_step)
+        layout.addWidget(flow_group)
         browse_input.clicked.connect(self._browse_input)
         output_browse.clicked.connect(self._browse_output)
         self.input_edit.editingFinished.connect(self._populate_pdf_metadata)
@@ -216,7 +231,6 @@ class MainWindow(QMainWindow):
             )
         )
         layout.addWidget(help_box)
-        layout.addStretch()
         return container
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
@@ -436,6 +450,7 @@ def _word_wrapped_label(text: str) -> QLabel:
 _SYSTEM_STYLE = """
 QLabel#appTitle { font-size: 22px; font-weight: 700; }
 QLabel#appSubtitle { color: palette(mid); margin-bottom: 2px; }
+QLabel#flowStep { padding: 2px 0; }
 QFrame#helpBox { border: 1px solid palette(midlight); border-radius: 6px; }
 QPushButton#convertButton { font-weight: 700; padding: 7px 16px; }
 """
