@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QUrl
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication
 from PySide6.QtWidgets import (
     QBoxLayout,
     QCheckBox,
@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -40,9 +39,9 @@ from app.pdf.reader import PdfReader
 class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
-    _NARROW_LAYOUT_BREAKPOINT = 1080
-    _DEFAULT_WIDTH = 1200
-    _DEFAULT_HEIGHT = 760
+    _NARROW_LAYOUT_BREAKPOINT = 760
+    _DEFAULT_WIDTH = 1120
+    _DEFAULT_HEIGHT = 700
 
     def __init__(self) -> None:
         super().__init__()
@@ -50,24 +49,19 @@ class MainWindow(QMainWindow):
         self._worker: ConversionWorker | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF'den EPUB'e Dönüştürücü")
-        self.setMinimumSize(800, 540)
+        self.setMinimumSize(760, 600)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self.setAcceptDrops(True)
         self._build_interface()
         self._restore_settings()
 
     def _build_interface(self) -> None:
-        self._scroll_area = QScrollArea()
-        self._scroll_area.setWidgetResizable(True)
-        self._scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.setCentralWidget(self._scroll_area)
-
         central = QWidget()
-        self._scroll_area.setWidget(central)
+        self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(8)
-        layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
         title = QLabel("PDF to EPUB")
         title.setObjectName("appTitle")
@@ -78,8 +72,8 @@ class MainWindow(QMainWindow):
 
         self._source_panel = self._create_source_panel()
         self._options_panel = self._create_options_panel()
-        self._source_panel.setMinimumWidth(360)
-        self._options_panel.setMinimumWidth(420)
+        self._source_panel.setMinimumWidth(320)
+        self._options_panel.setMinimumWidth(360)
         self._configuration_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         self._configuration_layout.setSpacing(12)
         self._configuration_layout.addWidget(self._source_panel, 1)
@@ -95,7 +89,7 @@ class MainWindow(QMainWindow):
         self.log_panel = QPlainTextEdit()
         self.log_panel.setReadOnly(True)
         self.log_panel.setMaximumBlockCount(500)
-        self.log_panel.setMinimumHeight(140)
+        self.log_panel.setMinimumHeight(100)
         self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.progress_bar)
@@ -177,7 +171,10 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         options_group = QGroupBox("Dönüştürme Ayarları")
-        options_layout = QVBoxLayout(options_group)
+        options_layout = QGridLayout(options_group)
+        options_layout.setContentsMargins(10, 8, 10, 8)
+        options_layout.setHorizontalSpacing(12)
+        options_layout.setVerticalSpacing(4)
         self.option_checks: dict[str, QCheckBox] = {}
         checkboxes = (
             ("use_ocr", "Metinsiz sayfalarda OCR kullan", True),
@@ -191,32 +188,35 @@ class MainWindow(QMainWindow):
             ("detect_chapters", "Bölümleri algıla", True),
             ("extract_cover", "Kapağı ayıkla/oluştur", True),
         )
-        for key, label, checked in checkboxes:
+        for index, (key, label, checked) in enumerate(checkboxes):
             checkbox = QCheckBox(label)
             checkbox.setChecked(checked)
+            checkbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             self.option_checks[key] = checkbox
-            options_layout.addWidget(checkbox)
-        language_row = QHBoxLayout()
-        language_row.addWidget(QLabel("OCR dili"))
+            options_layout.addWidget(checkbox, index // 2, index % 2)
+        options_layout.setColumnStretch(0, 1)
+        options_layout.setColumnStretch(1, 1)
+
+        language_label = QLabel("OCR dili")
         self.ocr_language = QComboBox()
         self.ocr_language.addItem("Türkçe", "tur")
-        language_row.addWidget(self.ocr_language)
-        options_layout.addLayout(language_row)
-        style_row = QHBoxLayout()
-        style_row.addWidget(QLabel("EPUB görünümü"))
+        style_label = QLabel("EPUB görünümü")
         self.css_style = QComboBox()
         self.css_style.addItem("Okuyucu", "reader")
         self.css_style.addItem("Kompakt", "compact")
-        style_row.addWidget(self.css_style)
-        options_layout.addLayout(style_row)
-        theme_row = QHBoxLayout()
-        theme_row.addWidget(QLabel("Tema"))
+        theme_label = QLabel("Tema")
         self.theme = QComboBox()
         self.theme.addItem("Sistem", "system")
         self.theme.addItem("Açık", "light")
         self.theme.addItem("Koyu", "dark")
-        theme_row.addWidget(self.theme)
-        options_layout.addLayout(theme_row)
+        control_row = len(checkboxes) // 2
+        for row, label, combo in (
+            (control_row, language_label, self.ocr_language),
+            (control_row + 1, style_label, self.css_style),
+            (control_row + 2, theme_label, self.theme),
+        ):
+            options_layout.addWidget(label, row, 0)
+            options_layout.addWidget(combo, row, 1)
         self.theme.currentIndexChanged.connect(self._on_theme_changed)
         layout.addWidget(options_group)
 
@@ -400,9 +400,27 @@ class MainWindow(QMainWindow):
         geometry = self._settings.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        if self.width() < self._DEFAULT_WIDTH:
-            self.resize(self._DEFAULT_WIDTH, max(self.height(), self._DEFAULT_HEIGHT))
+        if self.isMaximized():
+            self.showNormal()
+        self.resize(
+            max(self.minimumWidth(), min(self.width(), self._DEFAULT_WIDTH)),
+            max(self.minimumHeight(), min(self.height(), self._DEFAULT_HEIGHT)),
+        )
         self._apply_theme(str(self.theme.currentData()))
+        self._center_on_screen()
+
+    def _center_on_screen(self) -> None:
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry().adjusted(12, 12, -12, -12)
+        self.resize(
+            min(self.width(), available.width()),
+            min(self.height(), available.height()),
+        )
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def _save_settings(self) -> None:
         input_path = Path(self.input_edit.text())
