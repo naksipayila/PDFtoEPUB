@@ -8,8 +8,79 @@ $pythonVersion = "3.12.10"
 $pythonInstallerUrl = "https://www.python.org/ftp/python/$pythonVersion/python-$pythonVersion-amd64.exe"
 $tesseractInstallerUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
 $turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/tur.traineddata"
+$ProgressPreference = "Continue"
 
 Set-Location -LiteralPath $projectRoot
+
+function Download-WithProgress {
+    param(
+        [string]$Uri,
+        [string]$OutFile,
+        [string]$Activity
+    )
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $partialFile = "$OutFile.download"
+    if (Test-Path -LiteralPath $partialFile) {
+        Remove-Item -LiteralPath $partialFile -Force
+    }
+
+    $request = [Net.HttpWebRequest]::Create($Uri)
+    $request.Method = "GET"
+    $request.UserAgent = "PDFtoEPUB bootstrapper"
+    $response = $null
+    $responseStream = $null
+    $fileStream = $null
+    try {
+        $response = $request.GetResponse()
+        $responseStream = $response.GetResponseStream()
+        $fileStream = [IO.File]::Open($partialFile, [IO.FileMode]::Create)
+        $totalBytes = $response.ContentLength
+        $downloadedBytes = [int64]0
+        $buffer = New-Object byte[] (1024 * 1024)
+        $lastPercent = -1
+
+        while (($read = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $fileStream.Write($buffer, 0, $read)
+            $downloadedBytes += $read
+            if ($totalBytes -gt 0) {
+                $percent = [int][math]::Min(100, [math]::Floor($downloadedBytes * 100 / $totalBytes))
+                if ($percent -ne $lastPercent) {
+                    $downloadedMb = $downloadedBytes / 1MB
+                    $totalMb = $totalBytes / 1MB
+                    $status = "{0:N1} MB / {1:N1} MB ({2}%)" -f $downloadedMb, $totalMb, $percent
+                    Write-Progress -Activity $Activity -Status $status -PercentComplete $percent
+                    $statusLine = "{0}: {1}% ({2:N1} MB / {3:N1} MB)" -f $Activity, $percent, $downloadedMb, $totalMb
+                    Write-Host ("`r" + $statusLine.PadRight(100)) -NoNewline
+                    $lastPercent = $percent
+                }
+            } else {
+                $downloadedMb = $downloadedBytes / 1MB
+                Write-Progress -Activity $Activity -Status ("{0:N1} MB indirildi" -f $downloadedMb)
+            }
+        }
+        Write-Host ""
+        $fileStream.Close()
+        $fileStream = $null
+        Move-Item -LiteralPath $partialFile -Destination $OutFile -Force
+    } catch {
+        if (Test-Path -LiteralPath $partialFile) {
+            Remove-Item -LiteralPath $partialFile -Force
+        }
+        throw
+    } finally {
+        if ($fileStream) {
+            $fileStream.Dispose()
+        }
+        if ($responseStream) {
+            $responseStream.Dispose()
+        }
+        if ($response) {
+            $response.Dispose()
+        }
+        Write-Progress -Activity $Activity -Completed
+    }
+}
 
 function Invoke-Checked {
     param(
@@ -80,7 +151,7 @@ function Install-LocalPython {
     $installer = Join-Path $runtimeRoot "python-installer.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         Write-Host "Python bulunamadi. Python $pythonVersion indiriliyor..."
-        Invoke-WebRequest -Uri $pythonInstallerUrl -OutFile $installer -UseBasicParsing
+        Download-WithProgress $pythonInstallerUrl $installer "Python indiriliyor"
     }
 
     $pythonDirectory = Join-Path $runtimeRoot "python"
@@ -142,7 +213,7 @@ function Ensure-Tesseract {
         $installer = Join-Path $runtimeRoot "tesseract-installer.exe"
         if (-not (Test-Path -LiteralPath $installer)) {
             Write-Host "Tesseract OCR bulunamadi. Tesseract indiriliyor..."
-            Invoke-WebRequest -Uri $tesseractInstallerUrl -OutFile $installer -UseBasicParsing
+            Download-WithProgress $tesseractInstallerUrl $installer "Tesseract OCR indiriliyor"
         }
         Write-Host "Tesseract OCR kuruluyor..."
         $process = Start-Process -FilePath $installer -ArgumentList @("/S") -Wait -PassThru
@@ -161,7 +232,7 @@ function Ensure-Tesseract {
     if (-not (Test-Path -LiteralPath $turkishData)) {
         New-Item -ItemType Directory -Path $localTessdata -Force | Out-Null
         Write-Host "Turkce OCR verisi indiriliyor..."
-        Invoke-WebRequest -Uri $turkishDataUrl -OutFile $turkishData -UseBasicParsing
+        Download-WithProgress $turkishDataUrl $turkishData "Turkce OCR verisi indiriliyor"
     }
     $env:TESSDATA_PREFIX = $localTesseractRoot
     return $tesseract
