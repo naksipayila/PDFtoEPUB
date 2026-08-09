@@ -132,8 +132,38 @@ function Find-UsablePython {
         if ($LASTEXITCODE -eq 0 -and $launcherPython) {
             $candidates += $launcherPython.Trim()
         }
+        try {
+            $launcherPython = & $pyCommand.Source -3 -c "import sys; print(sys.executable)" 2>$null
+        } catch {
+            $launcherPython = $null
+        }
+        if ($LASTEXITCODE -eq 0 -and $launcherPython) {
+            $candidates += $launcherPython.Trim()
+        }
     }
     $candidates += Join-Path $runtimeRoot "python\python.exe"
+    $pythonTag = ($pythonVersion.Split(".")[0..1] -join "")
+    $candidates += Join-Path $env:LocalAppData "Programs\Python\Python$pythonTag\python.exe"
+    $candidates += Join-Path $env:LocalAppData "Programs\Python\Python$pythonTag-64\python.exe"
+
+    $registryRoots = @(
+        "HKCU:\Software\Python\PythonCore",
+        "HKLM:\Software\Python\PythonCore",
+        "HKLM:\Software\WOW6432Node\Python\PythonCore"
+    )
+    foreach ($registryRoot in $registryRoots) {
+        if (Test-Path -LiteralPath $registryRoot) {
+            foreach ($versionKey in (Get-ChildItem -LiteralPath $registryRoot -ErrorAction SilentlyContinue)) {
+                $installKey = Join-Path $versionKey.PSPath "InstallPath"
+                if (Test-Path -LiteralPath $installKey) {
+                    $installPath = (Get-ItemProperty -LiteralPath $installKey -Name "(default)" -ErrorAction SilentlyContinue)."(default)"
+                    if ($installPath) {
+                        $candidates += Join-Path $installPath "python.exe"
+                    }
+                }
+            }
+        }
+    }
 
     foreach ($candidate in $candidates | Select-Object -Unique) {
         if ($candidate -and (Test-Path -LiteralPath $candidate)) {
@@ -155,24 +185,41 @@ function Install-LocalPython {
     }
 
     $pythonDirectory = Join-Path $runtimeRoot "python"
+    $localPython = Join-Path $pythonDirectory "python.exe"
+    if (Test-Path -LiteralPath $pythonDirectory) {
+        $existingVersion = Get-PythonVersion $localPython
+        if (-not ($existingVersion -and $existingVersion -ge [version]"3.11")) {
+            Remove-Item -LiteralPath $pythonDirectory -Recurse -Force
+        }
+    }
+
+    $installLog = Join-Path $runtimeRoot "python-install.log"
     Write-Host "Python yerel klasore kuruluyor..."
     $arguments = @(
         "/quiet",
+        "/log",
+        "`"$installLog`"",
         "InstallAllUsers=0",
+        "TargetDir=`"$pythonDirectory`"",
         "PrependPath=0",
         "Include_launcher=0",
         "Include_pip=1",
         "Include_test=0",
-        "SimpleInstall=1",
-        "TargetDir=`"$pythonDirectory`""
+        "Include_exe=1",
+        "Include_lib=1",
+        "Include_dev=1",
+        "Include_tcltk=0",
+        "Include_doc=0",
+        "Include_tools=0",
+        "SimpleInstall=0"
     )
     $process = Start-Process -FilePath $installer -ArgumentList $arguments -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
+    if (($process.ExitCode -ne 0) -and ($process.ExitCode -ne 3010)) {
         throw "Python kurulumu basarisiz oldu. Cikis kodu: $($process.ExitCode)"
     }
-    $localPython = Join-Path $pythonDirectory "python.exe"
-    if (-not (Test-Path -LiteralPath $localPython)) {
-        throw "Python kurulumu tamamlandi ancak python.exe bulunamadi."
+    $localPython = Find-UsablePython
+    if (-not $localPython) {
+        throw "Python kurulumu tamamlandi ancak python.exe bulunamadi. Kurulum gunlugu: $installLog"
     }
     return $localPython
 }
