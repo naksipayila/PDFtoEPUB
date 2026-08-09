@@ -5,6 +5,21 @@ title PDF to EPUB
 
 if not defined LOCALAPPDATA set "LOCALAPPDATA=%USERPROFILE%\AppData\Local"
 
+set "CENTER_SCRIPT=%~dp0uygulama\ortala-konsol.ps1"
+if exist "%CENTER_SCRIPT%" goto :center_local
+
+set "CENTER_SCRIPT=%TEMP%\PDFtoEPUB-center-%RANDOM%-%RANDOM%.ps1"
+set "PDFTOEPUB_CENTER_SCRIPT=%CENTER_SCRIPT%"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/naksipayila/PDFtoEPUB/main/uygulama/ortala-konsol.ps1' -OutFile $env:PDFTOEPUB_CENTER_SCRIPT" >nul 2>&1
+if exist "%CENTER_SCRIPT%" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%CENTER_SCRIPT%" >nul 2>&1
+if exist "%CENTER_SCRIPT%" del /f /q "%CENTER_SCRIPT%" >nul 2>&1
+goto :center_done
+
+:center_local
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%CENTER_SCRIPT%" >nul 2>&1
+
+:center_done
+
 set "APP_ROOT=%LOCALAPPDATA%\PDFtoEPUB"
 set "STAGING_ROOT=%TEMP%\PDFtoEPUB-%RANDOM%-%RANDOM%"
 set "ARCHIVE_PATH=%STAGING_ROOT%\source.zip"
@@ -27,8 +42,6 @@ if not defined SOURCE_ROOT goto :fail
 
 if not exist "%APP_ROOT%" mkdir "%APP_ROOT%" >nul 2>&1
 if not exist "%APP_ROOT%" goto :fail
-
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%SOURCE_ROOT%\uygulama\ortala-konsol.ps1" >nul 2>&1
 
 robocopy "%SOURCE_ROOT%\uygulama" "%APP_ROOT%\uygulama" /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul
 if errorlevel 8 goto :fail
