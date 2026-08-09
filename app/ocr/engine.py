@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 
 import pymupdf as fitz
 from PIL import Image, ImageEnhance, ImageOps
 
 from app.core.models import BoundingBox, SourceTextBlock
 from app.core.normalizer import normalize_text
-from app.runtime import bundled_path
 
 LOGGER = logging.getLogger(__name__)
 
@@ -83,10 +81,6 @@ class OcrEngine:
     def _tesseract():
         import pytesseract
 
-        bundled_executable = bundled_path("tesseract", "tesseract.exe")
-        if bundled_executable.is_file():
-            pytesseract.pytesseract.tesseract_cmd = str(bundled_executable)
-            os.environ.setdefault("TESSDATA_PREFIX", str(bundled_executable.parent))
         return pytesseract
 
     @staticmethod
