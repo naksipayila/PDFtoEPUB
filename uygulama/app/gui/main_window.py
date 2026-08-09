@@ -39,8 +39,8 @@ class MainWindow(QMainWindow):
 
     _NARROW_LAYOUT_BREAKPOINT = 760
     _NARROW_MINIMUM_HEIGHT = 620
-    _DEFAULT_WIDTH = 960
-    _DEFAULT_HEIGHT = 480
+    _DEFAULT_WIDTH = 720
+    _DEFAULT_HEIGHT = 620
 
     def __init__(self) -> None:
         super().__init__()

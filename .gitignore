@@ -10,6 +10,5 @@ dist/
 *.epub
 *.pdf
 *.lnk
-!PDF to EPUB.lnk
 pdf_to_epub.log
 debug/

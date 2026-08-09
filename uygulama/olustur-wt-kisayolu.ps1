@@ -4,10 +4,10 @@ $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dispatcherPath = Join-Path $projectRoot "baslat-dispatch.ps1"
 $silentLauncherPath = Join-Path $projectRoot "baslat-sessiz.vbs"
 $distributionRoot = Split-Path -Parent $projectRoot
+$portableLauncherPath = Join-Path $distributionRoot "PDFtoEPUBLauncher.exe"
 $desktopPath = [Environment]::GetFolderPath("Desktop")
 $shortcutPaths = @(
     (Join-Path $desktopPath "PDF to EPUB.lnk")
-    (Join-Path $distributionRoot "PDF to EPUB.lnk")
 )
 
 if (-not (Test-Path -LiteralPath $dispatcherPath)) {
@@ -16,41 +16,8 @@ if (-not (Test-Path -LiteralPath $dispatcherPath)) {
 if (-not (Test-Path -LiteralPath $silentLauncherPath)) {
     throw "baslat-sessiz.vbs bulunamadi: $silentLauncherPath"
 }
-
-$wtPath = $null
-$wtCommand = Get-Command "wt.exe" -ErrorAction SilentlyContinue
-if ($wtCommand -and $wtCommand.CommandType -eq "Application") {
-    $wtPath = $wtCommand.Source
-}
-if (-not $wtPath) {
-    $wtCandidates = @(
-        (Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\wt.exe"),
-        (Join-Path $env:ProgramFiles "WindowsApps\Microsoft.WindowsTerminal_8wekyb3d8bbwe\wt.exe")
-    )
-    foreach ($candidate in $wtCandidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            $wtPath = $candidate
-            break
-        }
-    }
-}
-if (-not $wtPath) {
-    throw "Windows Terminal (wt.exe) bulunamadi. Once Windows Terminal'i kurun."
-}
-
-$iconPath = Join-Path $projectRoot "assets\pdf-to-epub.ico"
-if (-not (Test-Path -LiteralPath $iconPath)) {
-    $iconPath = $wtPath
-    $terminalPackage = Get-AppxPackage -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like "Microsoft.WindowsTerminal*" } |
-        Sort-Object Version -Descending |
-        Select-Object -First 1
-    if ($terminalPackage) {
-        $packageIcon = Join-Path $terminalPackage.InstallLocation "Images\terminal_contrast-black.ico"
-        if (Test-Path -LiteralPath $packageIcon) {
-            $iconPath = $packageIcon
-        }
-    }
+if (-not (Test-Path -LiteralPath $portableLauncherPath)) {
+    throw "Portable launcher bulunamadi: $portableLauncherPath"
 }
 
 $shortcutInterop = @'
@@ -115,7 +82,9 @@ namespace PDFtoEPUB {
             link.SetWorkingDirectory(workingDirectory);
             link.SetDescription(description);
             link.SetShowCmd(1);
-            link.SetIconLocation(iconPath, 0);
+            if (!String.IsNullOrEmpty(iconPath)) {
+                link.SetIconLocation(iconPath, 0);
+            }
             link.SetRelativePath(shortcutPath, 0);
 
             var dataList = (IShellLinkDataList)link;
@@ -129,23 +98,13 @@ namespace PDFtoEPUB {
 '@
 Add-Type -TypeDefinition $shortcutInterop
 
-$rootPrefix = [IO.Path]::GetFullPath($distributionRoot).TrimEnd("\") + "\"
-$portableIconPath = "uygulama\assets\pdf-to-epub.ico"
 $description = "PDFtoEPUB uygulamasini baslatir"
 foreach ($shortcutPath in $shortcutPaths) {
-    $fullShortcutPath = [IO.Path]::GetFullPath($shortcutPath)
-    $isPortable = $fullShortcutPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
-    $linkIconPath = if ($isPortable -and (Test-Path -LiteralPath (Join-Path $projectRoot $portableIconPath))) {
-        $portableIconPath
-    } else {
-        $iconPath
-    }
-    $workingDirectory = if ($isPortable) { "" } else { $projectRoot }
     [PDFtoEPUB.ShortcutFactory]::Save(
         $shortcutPath,
-        $silentLauncherPath,
-        $workingDirectory,
-        $linkIconPath,
+        $portableLauncherPath,
+        $projectRoot,
+        $portableLauncherPath,
         $description
     )
     Write-Host "Kisayol olusturuldu: $shortcutPath"
