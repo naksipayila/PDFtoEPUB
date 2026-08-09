@@ -413,7 +413,7 @@ _DARK_STYLE = (
     + """
 QMainWindow, QWidget { background: #20242a; color: #e8eaed; }
 QGroupBox { border: 1px solid #4e5661; border-radius: 6px; margin-top: 7px; padding: 6px; }
-QLineEdit, QPlainTextEdit, QComboBox { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
+QLineEdit, QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
 QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 5px; }
 QPushButton#convertButton { background: #2f81c1; color: white; border: 0; border-radius: 6px; }
 """
