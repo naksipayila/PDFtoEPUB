@@ -40,6 +40,8 @@ class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
     _NARROW_LAYOUT_BREAKPOINT = 1080
+    _DEFAULT_WIDTH = 1200
+    _DEFAULT_HEIGHT = 760
 
     def __init__(self) -> None:
         super().__init__()
@@ -47,7 +49,8 @@ class MainWindow(QMainWindow):
         self._worker: ConversionWorker | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF'den EPUB'e Dönüştürücü")
-        self.setMinimumSize(640, 540)
+        self.setMinimumSize(800, 540)
+        self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self.setAcceptDrops(True)
         self._build_interface()
         self._restore_settings()
@@ -383,6 +386,8 @@ class MainWindow(QMainWindow):
         geometry = self._settings.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
+        if self.width() < self._DEFAULT_WIDTH:
+            self.resize(self._DEFAULT_WIDTH, max(self.height(), self._DEFAULT_HEIGHT))
         self._apply_theme(str(self.theme.currentData()))
 
     def _save_settings(self) -> None:
