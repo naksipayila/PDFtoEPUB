@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 import pymupdf as fitz
+from PIL import Image
 
 from app.core.models import BoundingBox, ImageAsset, PositionedImage
 
@@ -21,6 +22,10 @@ _CONTENT_TYPES = {
     "tiff": "image/tiff",
     "bmp": "image/bmp",
 }
+_ARTIFACT_MAX_WIDTH = 12.0
+_ARTIFACT_MAX_HEIGHT = 4.0
+_ARTIFACT_STRIP_MAX_HEIGHT = 12.0
+_ARTIFACT_MAX_INK_RATIO = 0.15
 
 
 class ImageExtractor:
@@ -65,12 +70,14 @@ class ImageExtractor:
             try:
                 asset = self._extract_asset(page.parent, xref)
                 for rectangle in page.get_image_rects(xref):
+                    bbox = BoundingBox(rectangle.x0, rectangle.y0, rectangle.x1, rectangle.y1)
+                    if _is_raster_artifact(asset, bbox):
+                        LOGGER.debug("Ignoring raster artifact xref %s on page %s", xref, page_number)
+                        continue
                     locations.append(
                         PositionedImage(
                             asset_id=asset.id,
-                            bbox=BoundingBox(
-                                rectangle.x0, rectangle.y0, rectangle.x1, rectangle.y1
-                            ),
+                            bbox=bbox,
                             page_number=page_number,
                         )
                     )
@@ -87,3 +94,28 @@ class ImageExtractor:
             return existing
 
         return self.store_bytes(data, str(extracted.get("ext") or "png"))
+
+
+def _is_raster_artifact(asset: ImageAsset, bbox: BoundingBox) -> bool:
+    """Ignore ClearScan fragments that render as stray white boxes in EPUB readers."""
+    if bbox.width <= _ARTIFACT_MAX_WIDTH or bbox.height <= _ARTIFACT_MAX_HEIGHT:
+        return True
+    if bbox.height > _ARTIFACT_STRIP_MAX_HEIGHT:
+        return False
+    ink_ratio = _ink_ratio(asset.file_path)
+    return ink_ratio is not None and ink_ratio < _ARTIFACT_MAX_INK_RATIO
+
+
+def _ink_ratio(path: Path) -> float | None:
+    """Estimate whether a short raster strip contains meaningful visible content."""
+    try:
+        with Image.open(path) as source:
+            grayscale = source.convert("L")
+            histogram = grayscale.histogram()
+            grayscale.close()
+    except (OSError, ValueError):
+        return None
+    total = sum(histogram)
+    if not total:
+        return 0.0
+    return sum(histogram[:245]) / total
