@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from app.core.config import ConversionOptions
@@ -17,10 +18,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Convert a layout-aware PDF into EPUB 3.")
     parser.add_argument("input", type=Path, help="source PDF file")
     parser.add_argument("-o", "--output", type=Path, help="target EPUB file")
-    parser.add_argument(
+    ocr_group = parser.add_mutually_exclusive_group()
+    ocr_group.add_argument(
         "--ocr",
+        dest="ocr",
         action="store_true",
-        help="use local Tesseract OCR for textless or scanned pages",
+        default=True,
+        help="use local Tesseract OCR for textless or scanned pages (default)",
+    )
+    ocr_group.add_argument(
+        "--no-ocr",
+        dest="ocr",
+        action="store_false",
+        help="keep the PDF text layer instead of using OCR",
     )
     parser.add_argument("--no-images", action="store_true", help="do not extract images")
     parser.add_argument("--keep-page-numbers", action="store_true", help="keep edge page numbers")
@@ -47,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(arguments: list[str] | None = None) -> int:
     """Execute a conversion and return a process status code."""
     args = build_parser().parse_args(arguments)
+    _configure_console_encoding()
     output = args.output or args.input.with_suffix(".epub")
     if output.suffix.lower() != ".epub":
         output = output.with_suffix(".epub")
@@ -82,6 +93,18 @@ def main(arguments: list[str] | None = None) -> int:
 def _print_progress(event: ProgressEvent) -> None:
     suffix = f" ({event.current}/{event.total})" if event.total else ""
     print(f"{event.message}{suffix}")
+
+
+def _configure_console_encoding() -> None:
+    """Prevent Turkish progress messages from aborting on legacy Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            continue
 
 
 if __name__ == "__main__":

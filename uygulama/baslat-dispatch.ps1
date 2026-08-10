@@ -5,6 +5,23 @@ $venvRoot = Join-Path $projectRoot ".venv"
 $venvPython = Join-Path $venvRoot "Scripts\python.exe"
 $pythonw = Join-Path $venvRoot "Scripts\pythonw.exe"
 $localTessdata = Join-Path $projectRoot ".runtime\tesseract\tessdata\tur.traineddata"
+$localTessdataMarker = Join-Path $projectRoot ".runtime\tesseract\tessdata\tur.model"
+$requiredTessdataVersion = "tessdata_best"
+
+function Find-Tesseract {
+    $candidates = @(
+        (Get-Command tesseract -ErrorAction SilentlyContinue).Source,
+        "C:\Program Files\Tesseract-OCR\tesseract.exe",
+        "C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        (Join-Path $projectRoot ".runtime\tesseract\tesseract.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+    }
+    return $null
+}
 
 function Test-Ready {
     if (-not (Test-Path -LiteralPath $venvPython) -or -not (Test-Path -LiteralPath $pythonw)) {
@@ -20,23 +37,18 @@ function Test-Ready {
         return $false
     }
 
-    $tesseractCandidates = @(
-        (Get-Command tesseract -ErrorAction SilentlyContinue).Source,
-        "C:\Program Files\Tesseract-OCR\tesseract.exe",
-        "C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-        (Join-Path $projectRoot ".runtime\tesseract\tesseract.exe")
-    )
-    $hasTesseract = $false
-    foreach ($candidate in $tesseractCandidates) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate)) {
-            $hasTesseract = $true
-            break
-        }
+    if (-not (Find-Tesseract) -or -not (Test-Path -LiteralPath $localTessdata)) {
+        return $false
     }
-    return $hasTesseract -and (Test-Path -LiteralPath $localTessdata)
+    if (-not (Test-Path -LiteralPath $localTessdataMarker)) {
+        return $false
+    }
+    return (Get-Content -LiteralPath $localTessdataMarker -Raw).Trim() -eq $requiredTessdataVersion
 }
 
 if (Test-Ready) {
+    $env:PDFTOEPUB_TESSERACT = Find-Tesseract
+    $env:TESSDATA_PREFIX = Split-Path -Parent $localTessdata
     Start-Process -FilePath $pythonw -WorkingDirectory $projectRoot -ArgumentList @("run.py")
     exit 0
 }

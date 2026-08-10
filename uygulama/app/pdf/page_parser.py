@@ -7,6 +7,7 @@ from statistics import median
 
 import pymupdf as fitz
 
+from app.core.errors import ConversionError
 from app.core.models import BoundingBox, ParsedPage, PositionedImage, SourceTextBlock
 from app.core.normalizer import normalize_text
 from app.ocr.engine import OcrEngine
@@ -41,16 +42,43 @@ class PageParser:
         ocr_available = bool(
             use_ocr and self._ocr_engine and self._ocr_engine.available(ocr_language)
         )
-        if use_ocr and ocr_available and (not blocks or is_scanned_page):
-            ocr_blocks = self._ocr_engine.extract_page(page, page_number, ocr_language)
-            if ocr_blocks:
-                blocks = ocr_blocks
-                ocr_used = True
-        elif use_ocr and (not blocks or is_scanned_page):
-            LOGGER.warning(
-                "Page %s has no usable OCR language data; keeping the extracted text",
-                page_number,
-            )
+        if use_ocr and (not blocks or is_scanned_page):
+            if not ocr_available:
+                if is_scanned_page:
+                    raise ConversionError(
+                        f"Sayfa {page_number} taranmış ancak Türkçe OCR kullanılamıyor. "
+                        "Tesseract ve tur.traineddata kurulumunu kontrol edin."
+                    )
+                LOGGER.warning("Page %s has no usable OCR language data", page_number)
+            else:
+                try:
+                    ocr_blocks = self._ocr_engine.extract_page(page, page_number, ocr_language)
+                except (OSError, RuntimeError) as error:
+                    if is_scanned_page:
+                        _fallback_to_page_image(
+                            images, rectangle.width, rectangle.height, page_number
+                        )
+                        blocks = []
+                        LOGGER.warning(
+                            "OCR failed on page %s; retaining the page image: %s",
+                            page_number,
+                            error,
+                        )
+                    else:
+                        LOGGER.warning("OCR failed on page %s: %s", page_number, error)
+                else:
+                    if ocr_blocks:
+                        blocks = ocr_blocks
+                        ocr_used = True
+                    elif is_scanned_page:
+                        _fallback_to_page_image(
+                            images, rectangle.width, rectangle.height, page_number
+                        )
+                        blocks = []
+                        LOGGER.warning(
+                            "OCR produced no text on page %s; retaining the page image",
+                            page_number,
+                        )
 
         if blocks:
             images = [
@@ -133,6 +161,20 @@ def _page_has_background_image(page: fitz.Page, page_width: float, page_height: 
             ):
                 return True
     return False
+
+
+def _fallback_to_page_image(
+    images: list[PositionedImage],
+    page_width: float,
+    page_height: float,
+    page_number: int,
+) -> None:
+    """Drop an unreliable text layer only when the scanned page image is available."""
+    if any(_is_page_background(image, page_width, page_height) for image in images):
+        return
+    raise ConversionError(
+        f"Sayfa {page_number} taranmış; OCR kullanılamıyor ve güvenilir sayfa görseli bulunamadı."
+    )
 
 
 def _line_text(line: dict) -> str:

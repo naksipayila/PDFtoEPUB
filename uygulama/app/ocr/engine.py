@@ -5,6 +5,8 @@ from __future__ import annotations
 import io
 import logging
 import os
+import shutil
+from pathlib import Path
 
 import pymupdf as fitz
 from PIL import Image, ImageOps
@@ -14,6 +16,7 @@ from app.core.normalizer import normalize_text
 
 LOGGER = logging.getLogger(__name__)
 OCR_DPI = 300.0
+_RUNTIME_TESSDATA = Path(__file__).resolve().parents[2] / ".runtime" / "tesseract" / "tessdata"
 
 
 class OcrEngine:
@@ -29,7 +32,7 @@ class OcrEngine:
             return True
         try:
             return language in pytesseract.get_languages(config="")
-        except pytesseract.TesseractError:
+        except (OSError, RuntimeError):
             return False
 
     def extract_page(
@@ -89,9 +92,13 @@ class OcrEngine:
     def _tesseract():
         import pytesseract
 
-        command = os.environ.get("PDFTOEPUB_TESSERACT")
+        command = os.environ.get("PDFTOEPUB_TESSERACT") or _find_tesseract()
         if command:
             pytesseract.pytesseract.tesseract_cmd = command
+        tessdata = _find_tessdata()
+        if tessdata is not None:
+            # Keep the model path out of pytesseract's command-string parsing on Windows.
+            os.environ["TESSDATA_PREFIX"] = str(tessdata)
         return pytesseract
 
     @staticmethod
@@ -129,3 +136,36 @@ def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:
             needs_space = False
         text += (" " if needs_space else "") + current_text
     return normalize_text(text)
+
+
+def _find_tesseract() -> str | None:
+    candidates = [
+        os.environ.get("PDFTOEPUB_TESSERACT"),
+        shutil.which("tesseract"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        str(_RUNTIME_TESSDATA.parent / "tesseract.exe"),
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    return None
+
+
+def _find_tessdata() -> Path | None:
+    prefix = os.environ.get("TESSDATA_PREFIX")
+    candidates: list[Path] = []
+    if prefix:
+        prefix_path = Path(prefix)
+        candidates.extend((prefix_path, prefix_path / "tessdata"))
+    candidates.append(_RUNTIME_TESSDATA)
+
+    command = _find_tesseract()
+    if command:
+        executable_dir = Path(command).parent
+        candidates.extend((executable_dir / "tessdata", executable_dir.parent / "share" / "tessdata"))
+
+    for candidate in candidates:
+        if candidate.is_dir() and any(candidate.glob("*.traineddata")):
+            return candidate
+    return None

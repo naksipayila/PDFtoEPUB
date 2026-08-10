@@ -1,7 +1,10 @@
 from types import SimpleNamespace
 
+import pytest
 from PIL import Image
 
+from app.core.errors import ConversionError
+from app.core.models import BoundingBox, PositionedImage
 from app.ocr.engine import OcrEngine
 from app.pdf.page_parser import PageParser
 from tests.conftest import source_block
@@ -24,6 +27,22 @@ class StubOcrEngine:
     def extract_page(self, page, page_number: int, language: str):
         self.pages.append(page_number)
         return [source_block("OCR text", page=page_number, identifier="ocr-result")]
+
+
+class UnavailableOcrEngine:
+    def available(self, language: str) -> bool:
+        return False
+
+
+class BackgroundImageExtractor:
+    def extract_page(self, page, page_number):
+        return [
+            PositionedImage(
+                asset_id="page-image",
+                bbox=BoundingBox(0, 0, page.rect.width, page.rect.height),
+                page_number=page_number,
+            )
+        ]
 
 
 class FakePage:
@@ -75,6 +94,39 @@ def test_scanned_page_detection_does_not_require_image_extraction(monkeypatch) -
 
     assert parsed.ocr_used
     assert ocr.pages == [1]
+
+
+def test_scanned_page_fails_instead_of_preserving_unreliable_text(monkeypatch) -> None:
+    native = source_block("Bozuk gizli metin", page=1, identifier="native")
+    parser = PageParser(StubImageExtractor(), UnavailableOcrEngine())
+    monkeypatch.setattr(PageParser, "_extract_text", staticmethod(lambda page, number: [native]))
+
+    with pytest.raises(ConversionError, match="taranmış.*OCR"):
+        parser.parse(FakePage(has_background=True), 1, True, "tur")
+
+
+def test_scanned_page_keeps_the_page_image_when_ocr_has_no_text(monkeypatch) -> None:
+    native = source_block("Bozuk gizli metin", page=1, identifier="native")
+
+    class EmptyOcrEngine(StubOcrEngine):
+        def extract_page(self, page, page_number: int, language: str):
+            self.pages.append(page_number)
+            return []
+
+    parser = PageParser(BackgroundImageExtractor(), EmptyOcrEngine())
+    monkeypatch.setattr(PageParser, "_extract_text", staticmethod(lambda page, number: [native]))
+
+    parsed = parser.parse(FakePage(has_background=True), 1, True, "tur")
+
+    assert parsed.text_blocks == []
+    assert len(parsed.images) == 1
+
+
+def test_ocr_is_disabled_only_when_requested() -> None:
+    from app.cli import build_parser
+
+    assert build_parser().parse_args(["book.pdf"]).ocr
+    assert not build_parser().parse_args(["book.pdf", "--no-ocr"]).ocr
 
 
 def test_ocr_preprocessing_preserves_a_grayscale_image() -> None:
