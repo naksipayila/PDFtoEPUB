@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import re
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, Qt, QUrl, Signal
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QDesktopServices,
     QDragEnterEvent,
@@ -309,6 +311,7 @@ class MainWindow(QMainWindow):
 
     def _on_success(self, report: object) -> None:
         self._play_completion_sound()
+        QTimer.singleShot(0, self._bring_to_front)
         self._set_running(False)
         self.progress_bar.setValue(100)
         self.status_label.setVisible(True)
@@ -320,6 +323,23 @@ class MainWindow(QMainWindow):
         self.action_bar.setVisible(True)
         summary = report.summary() if hasattr(report, "summary") else ""
         self._append_log(summary)
+
+    def _bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
+        self.activateWindow()
+        if sys.platform != "win32":
+            return
+        try:
+            window_handle = int(self.winId())
+            user32 = ctypes.windll.user32
+            user32.ShowWindow(window_handle, 9)
+            user32.SetForegroundWindow(window_handle)
+        except (AttributeError, OSError, TypeError, ValueError):
+            LOGGER.debug("Could not bring the conversion window to the foreground", exc_info=True)
 
     def _play_completion_sound(self) -> None:
         sound_path = _COMPLETION_SOUND_PATH
