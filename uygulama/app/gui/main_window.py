@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from PySide6.QtCore import QFileInfo, QSettings, QStandardPaths, Qt, QUrl, Signal
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QUrl, Signal
 from PySide6.QtGui import (
     QDesktopServices,
     QDragEnterEvent,
@@ -14,7 +14,6 @@ from PySide6.QtGui import (
     QGuiApplication,
 )
 from PySide6.QtWidgets import (
-    QFileIconProvider,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -45,20 +44,20 @@ class PdfDropZone(QFrame):
         super().__init__()
         self.setAcceptDrops(True)
         self.setObjectName("pdfDropZone")
-        self.setMinimumHeight(132)
+        self.setMinimumHeight(206)
         self.setProperty("dragActive", False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(4)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._icon_label = QLabel("PDF")
         self._icon_label.setObjectName("pdfDropIcon")
         self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_label.setFixedSize(60, 60)
+        self._icon_label.setFixedSize(72, 44)
 
-        self._name_label = QLabel("PDF dosyasını buraya sürükleyin")
+        self._name_label = QLabel("PDF dosyasını bırakın")
         self._name_label.setObjectName("pdfDropTitle")
         self._name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._name_label.setWordWrap(True)
@@ -72,13 +71,7 @@ class PdfDropZone(QFrame):
         layout.addWidget(self._hint_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def set_pdf(self, path: Path) -> None:
-        icon = QFileIconProvider().icon(QFileInfo(str(path)))
-        pixmap = icon.pixmap(52, 52)
-        if pixmap.isNull():
-            self._icon_label.setText("PDF")
-        else:
-            self._icon_label.setText("")
-            self._icon_label.setPixmap(pixmap)
+        self._icon_label.setText("PDF")
         self._name_label.setText(path.name)
         self._hint_label.setText("Dönüşüm başlatılıyor...")
 
@@ -125,7 +118,7 @@ class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
     _DEFAULT_WIDTH = 680
-    _DEFAULT_HEIGHT = 420
+    _DEFAULT_HEIGHT = 440
 
     def __init__(self) -> None:
         super().__init__()
@@ -136,7 +129,7 @@ class MainWindow(QMainWindow):
         self._input_path: Path | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF to EPUB Converter")
-        self.setMinimumSize(680, 420)
+        self.setMinimumSize(640, 400)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self._build_interface()
         self._restore_settings()
@@ -144,51 +137,94 @@ class MainWindow(QMainWindow):
 
     def _build_interface(self) -> None:
         central = QWidget()
+        central.setObjectName("centralWidget")
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
+
+        layout.addWidget(self._create_header())
 
         self._source_panel = self._create_source_panel()
         self._source_panel.setMinimumWidth(320)
         layout.addWidget(self._source_panel)
 
-        progress_group = QWidget()
-        progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        progress_layout = QVBoxLayout(progress_group)
+        self.progress_group = QWidget()
+        self.progress_group.setObjectName("progressGroup")
+        self.progress_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Maximum,
+        )
+        progress_layout = QVBoxLayout(self.progress_group)
         progress_layout.setContentsMargins(0, 0, 0, 0)
+        progress_layout.setSpacing(7)
         self.status_label = QLabel()
+        self.status_label.setObjectName("statusLabel")
         self.status_label.setVisible(False)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self.progress_bar.setFixedHeight(16)
+        self.progress_bar.setTextVisible(True)
+        self.log_title = QLabel("İşlem günlüğü")
+        self.log_title.setObjectName("logTitle")
+        self.log_title.setVisible(False)
         self.log_panel = QPlainTextEdit()
+        self.log_panel.setObjectName("logPanel")
         self.log_panel.setReadOnly(True)
         self.log_panel.setMaximumBlockCount(500)
-        self.log_panel.setFixedHeight(110)
+        self.log_panel.setFixedHeight(92)
         self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.progress_bar)
+        progress_layout.addWidget(self.log_title)
         progress_layout.addWidget(self.log_panel)
-        layout.addWidget(progress_group)
+        self.progress_group.setVisible(False)
+        layout.addWidget(self.progress_group)
 
-        button_row = QHBoxLayout()
+        self.action_bar = QWidget()
+        self.action_bar.setObjectName("actionBar")
+        button_row = QHBoxLayout(self.action_bar)
+        button_row.setContentsMargins(0, 0, 0, 0)
+        button_row.setSpacing(8)
         self.open_epub_button = QPushButton("EPUB'ı Aç")
+        self.open_epub_button.setObjectName("openEpubButton")
         self.open_folder_button = QPushButton("Klasörü Aç")
+        self.open_folder_button.setObjectName("openFolderButton")
         self.open_epub_button.setEnabled(False)
         self.open_folder_button.setEnabled(False)
+        self.open_epub_button.setVisible(False)
+        self.open_folder_button.setVisible(False)
         self.cancel_button = QPushButton("İptal")
+        self.cancel_button.setObjectName("cancelButton")
         self.cancel_button.setEnabled(False)
+        self.cancel_button.setVisible(False)
         button_row.addWidget(self.open_epub_button)
         button_row.addWidget(self.open_folder_button)
         button_row.addStretch()
         button_row.addWidget(self.cancel_button)
-        layout.addLayout(button_row)
+        self.action_bar.setVisible(False)
+        layout.addWidget(self.action_bar)
 
         self.cancel_button.clicked.connect(self._cancel_conversion)
         self.open_epub_button.clicked.connect(self._open_epub)
         self.open_folder_button.clicked.connect(self._open_folder)
+
+    def _create_header(self) -> QWidget:
+        header = QWidget()
+        header.setObjectName("appHeader")
+        layout = QVBoxLayout(header)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(3)
+
+        brand_label = QLabel("PDFtoEPUB")
+        brand_label.setObjectName("appBrand")
+        tagline_label = QLabel("PDF'i bırakın, okunabilir EPUB'ı alın.")
+        tagline_label.setObjectName("appTagline")
+        layout.addWidget(brand_label)
+        layout.addWidget(tagline_label)
+        return header
 
     def _create_source_panel(self) -> QWidget:
         panel = QWidget()
@@ -232,6 +268,13 @@ class MainWindow(QMainWindow):
         self._last_output = output_path
         self.progress_bar.setValue(0)
         self.log_panel.clear()
+        self.log_title.setVisible(False)
+        self.log_panel.setVisible(False)
+        self.open_epub_button.setVisible(False)
+        self.open_folder_button.setVisible(False)
+        self.open_epub_button.setEnabled(False)
+        self.open_folder_button.setEnabled(False)
+        self.progress_group.setVisible(True)
         self._set_running(True)
         self._append_log(f"Dönüştürme başlatılıyor: {input_path.name}")
         self._append_log(f"Çıktı: {output_path}")
@@ -279,6 +322,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText("EPUB başarıyla oluşturuldu.")
         self.open_epub_button.setEnabled(self._last_output is not None)
         self.open_folder_button.setEnabled(self._last_output is not None)
+        self.open_epub_button.setVisible(True)
+        self.open_folder_button.setVisible(True)
+        self.action_bar.setVisible(True)
         summary = report.summary() if hasattr(report, "summary") else ""
         self._append_log(summary)
         QMessageBox.information(self, "Dönüştürme tamamlandı", "EPUB başarıyla oluşturuldu.")
@@ -298,6 +344,11 @@ class MainWindow(QMainWindow):
 
     def _set_running(self, running: bool) -> None:
         self.cancel_button.setEnabled(running)
+        self.cancel_button.setVisible(running)
+        if running:
+            self.action_bar.setVisible(True)
+        elif not self.open_epub_button.isVisible():
+            self.action_bar.setVisible(False)
 
     def _open_epub(self) -> None:
         if self._last_output and self._last_output.exists():
@@ -308,6 +359,8 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_output.parent)))
 
     def _append_log(self, message: str) -> None:
+        self.log_title.setVisible(True)
+        self.log_panel.setVisible(True)
         self.log_panel.appendPlainText(message)
 
     def _show_error(self, message: str) -> None:
@@ -372,15 +425,29 @@ def _epub_filename(input_path: Path) -> str:
 
 
 _DARK_STYLE = """
-QMainWindow, QWidget { background: #20242a; color: #e8eaed; }
+QMainWindow { background: #0e141b; }
+QWidget { background: transparent; color: #edf3f7; }
+QWidget#centralWidget { background: #151d26; }
 QLabel { background: transparent; }
-QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 5px; padding: 3px 5px; color: #f2f4f7; }
-QProgressBar { background: #20242a; border: 1px solid #323943; border-radius: 4px; height: 18px; text-align: center; color: #e8eaed; }
-QProgressBar::chunk { background: #2f81c1; border-radius: 3px; }
-QFrame#pdfDropZone { background: #20242a; border: 1px dashed #58616d; border-radius: 9px; }
-QFrame#pdfDropZone[dragActive="true"] { background: #263849; border-color: #2f81c1; }
-QLabel#pdfDropIcon { color: #8fa4b8; font-size: 20px; font-weight: 700; }
-QLabel#pdfDropTitle { color: #f2f4f7; font-size: 15px; font-weight: 700; }
-QLabel#pdfDropHint { color: #aab3bf; }
-QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 4px 8px; }
+QLabel#appBrand { color: #f3f7f9; font-size: 21px; font-weight: 800; }
+QLabel#appTagline { color: #8fa1b2; font-size: 12px; }
+QFrame#pdfDropZone { background: #1b2530; border: 1px dashed #526273; border-radius: 16px; }
+QFrame#pdfDropZone:hover { border-color: #708496; }
+QFrame#pdfDropZone[dragActive="true"] { background: #17323a; border-color: #5bd6d2; }
+QLabel#pdfDropIcon { background: #5bd6d2; color: #0d2227; border-radius: 12px; font-size: 17px; font-weight: 800; }
+QLabel#pdfDropTitle { color: #f4f8fa; font-size: 17px; font-weight: 700; }
+QLabel#pdfDropHint { color: #96a8b8; font-size: 12px; }
+QLabel#statusLabel { color: #b7c5d0; font-size: 12px; font-weight: 600; }
+QProgressBar { background: #0f161d; border: 1px solid #2b3947; border-radius: 8px; text-align: center; color: #dce7ed; font-size: 10px; }
+QProgressBar::chunk { background: #3dbec0; border-radius: 7px; }
+QLabel#logTitle { color: #7f93a4; font-size: 11px; font-weight: 700; }
+QPlainTextEdit { background: #10171f; border: 1px solid #2b3947; border-radius: 10px; padding: 7px 9px; color: #cbd7df; font-size: 11px; }
+QPushButton { background: #263442; color: #e7f0f4; border: 1px solid #3c5060; border-radius: 9px; min-height: 34px; padding: 0 14px; font-weight: 600; }
+QPushButton:hover { background: #304553; border-color: #5bd6d2; }
+QPushButton:pressed { background: #1f2b36; }
+QPushButton:disabled { background: #1b242d; color: #60717f; border-color: #27333f; }
+QPushButton#openEpubButton { background: #5bd6d2; color: #0d2227; border-color: #5bd6d2; font-weight: 800; }
+QPushButton#openEpubButton:hover { background: #79e3de; border-color: #79e3de; }
+QPushButton#cancelButton { background: transparent; color: #9eb0bd; border-color: #334452; }
+QPushButton#cancelButton:hover { color: #e7f0f4; border-color: #718694; }
 """
