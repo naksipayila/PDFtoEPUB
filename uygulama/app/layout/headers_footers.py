@@ -133,7 +133,7 @@ def _similar_signature(left: str, right: str) -> bool:
         return True
     if min(len(left), len(right)) < 8:
         return False
-    return SequenceMatcher(None, left, right).ratio() >= 0.9
+    return SequenceMatcher(None, left, right).ratio() >= 0.85
 
 
 def is_page_number(block: SourceTextBlock, page: ParsedPage) -> bool:
