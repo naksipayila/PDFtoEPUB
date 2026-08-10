@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QGuiApplication,
 )
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -33,6 +35,8 @@ from app.core.errors import ConversionError
 from app.core.models import ProgressEvent
 from app.gui.workers.conversion_worker import ConversionWorker
 from app.pdf.reader import PdfReader
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PdfDropZone(QFrame):
@@ -128,6 +132,10 @@ class MainWindow(QMainWindow):
         self._worker: ConversionWorker | None = None
         self._input_path: Path | None = None
         self._last_output: Path | None = None
+        self._audio_output = QAudioOutput(self)
+        self._completion_player = QMediaPlayer(self)
+        self._completion_player.setAudioOutput(self._audio_output)
+        self._completion_player.errorOccurred.connect(self._on_audio_error)
         self.setWindowTitle("PDF to EPUB Converter")
         self.setMinimumSize(640, 400)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
@@ -299,6 +307,7 @@ class MainWindow(QMainWindow):
                 self.progress_bar.setValue(100)
 
     def _on_success(self, report: object) -> None:
+        self._play_completion_sound()
         self._set_running(False)
         self.progress_bar.setValue(100)
         self.status_label.setVisible(True)
@@ -311,6 +320,18 @@ class MainWindow(QMainWindow):
         summary = report.summary() if hasattr(report, "summary") else ""
         self._append_log(summary)
         QMessageBox.information(self, "Dönüştürme tamamlandı", "EPUB başarıyla oluşturuldu.")
+
+    def _play_completion_sound(self) -> None:
+        sound_path = Path.home() / "Downloads" / "ses.mp3"
+        if not sound_path.is_file():
+            LOGGER.warning("Conversion completion sound not found: %s", sound_path)
+            return
+        self._completion_player.stop()
+        self._completion_player.setSource(QUrl.fromLocalFile(str(sound_path)))
+        self._completion_player.play()
+
+    def _on_audio_error(self, _error: object, error_string: str) -> None:
+        LOGGER.warning("Conversion completion sound could not be played: %s", error_string)
 
     def _on_failure(self, message: str) -> None:
         self._set_running(False)
