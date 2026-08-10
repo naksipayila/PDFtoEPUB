@@ -129,6 +129,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         self._settings = QSettings("PDFtoEPUB", "PDFtoEPUB")
         self._worker: ConversionWorker | None = None
         self._input_path: Path | None = None
