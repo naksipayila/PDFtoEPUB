@@ -37,6 +37,7 @@ from app.gui.workers.conversion_worker import ConversionWorker
 from app.pdf.reader import PdfReader
 
 LOGGER = logging.getLogger(__name__)
+_COMPLETION_SOUND_PATH = Path(__file__).resolve().parents[2] / "assets" / "ses.mp3"
 
 
 class PdfDropZone(QFrame):
@@ -319,10 +320,9 @@ class MainWindow(QMainWindow):
         self.action_bar.setVisible(True)
         summary = report.summary() if hasattr(report, "summary") else ""
         self._append_log(summary)
-        QMessageBox.information(self, "Dönüştürme tamamlandı", "EPUB başarıyla oluşturuldu.")
 
     def _play_completion_sound(self) -> None:
-        sound_path = Path.home() / "Downloads" / "ses.mp3"
+        sound_path = _COMPLETION_SOUND_PATH
         if not sound_path.is_file():
             LOGGER.warning("Conversion completion sound not found: %s", sound_path)
             return
