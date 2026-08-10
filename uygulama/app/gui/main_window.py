@@ -152,10 +152,11 @@ class MainWindow(QMainWindow):
         self._source_panel.setMinimumWidth(320)
         layout.addWidget(self._source_panel)
 
-        progress_group = QGroupBox("Dönüştürme")
+        progress_group = QGroupBox()
         progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         progress_layout = QVBoxLayout(progress_group)
-        self.status_label = QLabel("Başlamak için bir PDF seçin.")
+        self.status_label = QLabel()
+        self.status_label.setVisible(False)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
@@ -190,7 +191,7 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        input_group = QGroupBox("PDF Seçimi")
+        input_group = QGroupBox()
         input_layout = QVBoxLayout(input_group)
         self.drop_zone = PdfDropZone()
         input_layout.addWidget(self.drop_zone)
@@ -247,6 +248,7 @@ class MainWindow(QMainWindow):
             self.cancel_button.setEnabled(False)
 
     def _on_progress(self, event: ProgressEvent) -> None:
+        self.status_label.setVisible(True)
         self.status_label.setText(event.message)
         self._append_log(event.message)
         if event.total:
@@ -264,6 +266,7 @@ class MainWindow(QMainWindow):
     def _on_success(self, report: object) -> None:
         self._set_running(False)
         self.progress_bar.setValue(100)
+        self.status_label.setVisible(True)
         self.status_label.setText("EPUB başarıyla oluşturuldu.")
         self.open_epub_button.setEnabled(self._last_output is not None)
         self.open_folder_button.setEnabled(self._last_output is not None)
@@ -273,12 +276,14 @@ class MainWindow(QMainWindow):
 
     def _on_failure(self, message: str) -> None:
         self._set_running(False)
+        self.status_label.setVisible(True)
         self.status_label.setText("Dönüştürme başarısız oldu.")
         self._append_log(f"HATA: {message}")
         self._show_error(message)
 
     def _on_cancelled(self) -> None:
         self._set_running(False)
+        self.status_label.setVisible(True)
         self.status_label.setText("Dönüştürme iptal edildi.")
         self._append_log("Dönüştürme kullanıcı tarafından iptal edildi.")
 
