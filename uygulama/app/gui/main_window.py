@@ -5,11 +5,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, Qt, QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, QUrl
 from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication
 from PySide6.QtWidgets import (
-    QBoxLayout,
-    QCheckBox,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -37,10 +35,8 @@ from app.pdf.reader import PdfReader
 class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
-    _NARROW_LAYOUT_BREAKPOINT = 760
-    _NARROW_MINIMUM_HEIGHT = 506
     _DEFAULT_WIDTH = 720
-    _DEFAULT_HEIGHT = 506
+    _DEFAULT_HEIGHT = 460
 
     def __init__(self) -> None:
         super().__init__()
@@ -63,14 +59,8 @@ class MainWindow(QMainWindow):
         layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
         self._source_panel = self._create_source_panel()
-        self._options_panel = self._create_options_panel()
         self._source_panel.setMinimumWidth(320)
-        self._options_panel.setMinimumWidth(360)
-        self._configuration_layout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
-        self._configuration_layout.setSpacing(12)
-        self._configuration_layout.addWidget(self._source_panel, 1)
-        self._configuration_layout.addWidget(self._options_panel, 1)
-        layout.addLayout(self._configuration_layout)
+        layout.addWidget(self._source_panel)
 
         progress_group = QGroupBox("Dönüştürme")
         progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
@@ -109,7 +99,6 @@ class MainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self._cancel_conversion)
         self.open_epub_button.clicked.connect(self._open_epub)
         self.open_folder_button.clicked.connect(self._open_folder)
-        self._update_responsive_layout()
 
     def _create_source_panel(self) -> QWidget:
         panel = QWidget()
@@ -129,41 +118,6 @@ class MainWindow(QMainWindow):
         browse_input.clicked.connect(self._browse_input)
         return panel
 
-    def _create_options_panel(self) -> QWidget:
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        options_group = QGroupBox("Dönüştürme Ayarları")
-        options_group.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
-        options_layout = QGridLayout(options_group)
-        options_layout.setContentsMargins(10, 8, 10, 8)
-        options_layout.setHorizontalSpacing(12)
-        options_layout.setVerticalSpacing(4)
-        self.option_checks: dict[str, QCheckBox] = {}
-        checkboxes = (
-            ("use_ocr", "Metinsiz veya taranmış sayfalarda OCR kullan", True),
-            ("include_images", "Görselleri ekle", True),
-            ("optimize_images", "Görselleri optimize et", True),
-            ("remove_page_numbers", "Sayfa numaralarını kaldır", True),
-            ("remove_headers_footers", "Tekrarlanan üst/alt bilgileri kaldır", True),
-            ("preserve_footnotes", "Algılanan dipnotları koru", True),
-            ("detect_tables", "Temel tabloları algıla", True),
-            ("detect_columns", "Çok sütunlu okuma sırasını algıla", True),
-            ("detect_chapters", "Bölümleri algıla", True),
-            ("extract_cover", "Kapağı ayıkla/oluştur", True),
-        )
-        for index, (key, label, checked) in enumerate(checkboxes):
-            checkbox = QCheckBox(label)
-            checkbox.setChecked(checked)
-            checkbox.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            self.option_checks[key] = checkbox
-            options_layout.addWidget(checkbox, index // 2, index % 2)
-        options_layout.setColumnStretch(0, 1)
-        options_layout.setColumnStretch(1, 1)
-        layout.addWidget(options_group, 0, Qt.AlignmentFlag.AlignTop)
-
-        return container
-
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         urls = event.mimeData().urls()
         if urls and any(url.toLocalFile().lower().endswith(".pdf") for url in urls):
@@ -176,10 +130,6 @@ class MainWindow(QMainWindow):
                 self._set_input(path)
                 event.acceptProposedAction()
                 return
-
-    def resizeEvent(self, event: object) -> None:  # noqa: N802
-        super().resizeEvent(event)  # type: ignore[arg-type]
-        self._update_responsive_layout()
 
     def closeEvent(self, event: object) -> None:  # noqa: N802
         self._save_settings()
@@ -225,11 +175,7 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _options(self) -> ConversionOptions:
-        return ConversionOptions(
-            **{name: checkbox.isChecked() for name, checkbox in self.option_checks.items()},
-            ocr_language="tur",
-            css_style_mode="reader",
-        )
+        return ConversionOptions(ocr_language="tur", css_style_mode="reader")
 
     def _cancel_conversion(self) -> None:
         if self._worker is not None:
@@ -292,10 +238,6 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Dönüştürme hatası", message)
 
     def _restore_settings(self) -> None:
-        for name, checkbox in self.option_checks.items():
-            saved = self._settings.value(f"option/{name}")
-            if saved is not None:
-                checkbox.setChecked(str(saved).lower() in {"true", "1"})
         geometry = self._settings.value("geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
@@ -325,27 +267,10 @@ class MainWindow(QMainWindow):
         input_path = Path(self.input_edit.text())
         if input_path.is_file():
             self._settings.setValue("last_input_dir", str(input_path.parent))
-        for name, checkbox in self.option_checks.items():
-            self._settings.setValue(f"option/{name}", checkbox.isChecked())
         self._settings.setValue("geometry", self.saveGeometry())
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(_DARK_STYLE)
-
-    def _update_responsive_layout(self) -> None:
-        direction = (
-            QBoxLayout.Direction.TopToBottom
-            if self.width() < self._NARROW_LAYOUT_BREAKPOINT
-            else QBoxLayout.Direction.LeftToRight
-        )
-        if self._configuration_layout.direction() != direction:
-            self._configuration_layout.setDirection(direction)
-        self.setMinimumHeight(
-            self._NARROW_MINIMUM_HEIGHT
-            if direction == QBoxLayout.Direction.TopToBottom
-            else 460
-        )
-
 
 def _safe_filename(value: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*]+', "_", value).strip(" .")
