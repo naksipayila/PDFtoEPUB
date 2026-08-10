@@ -95,7 +95,9 @@ class EpubBuilder:
             return filename, asset.media_type
         try:
             with Image.open(asset.file_path) as image:
-                if extension in {"jpg", "jpeg"}:
+                if extension in {"jpg", "jpeg", "jpx", "jp2", "j2k"}:
+                    filename = f"{asset.id}.jpg"
+                    destination = destination_dir / filename
                     image.convert("RGB").save(destination, format="JPEG", quality=88, optimize=True)
                     return filename, "image/jpeg"
                 if extension == "png":
