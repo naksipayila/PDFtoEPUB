@@ -1,3 +1,4 @@
+from app.core.normalizer import join_line_text
 from app.ocr.engine import _join_ocr_words
 from app.pdf.page_parser import _line_text
 
@@ -34,3 +35,14 @@ def test_rebuilds_native_line_from_character_geometry() -> None:
     }
 
     assert _line_text(line) == "Hümanizim"
+
+
+def test_repairs_hard_and_soft_hyphenated_line_breaks_without_a_space() -> None:
+    assert join_line_text("yaşam-", "ının") == "yaşamının"
+    assert join_line_text("sosya\u00ad", "lizm") == "sosyalizm"
+
+
+def test_preserves_a_soft_hyphen_until_the_next_line_is_joined() -> None:
+    partial = join_line_text("sosya\u00ad", "lizm\u00ad")
+
+    assert join_line_text(partial, "öncesinde") == "sosyalizmöncesinde"

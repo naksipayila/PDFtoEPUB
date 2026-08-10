@@ -20,12 +20,18 @@ from app.core.models import (
     SourceTextBlock,
     TableBlock,
 )
+from app.core.normalizer import normalize_text
 from app.layout.captions import associate_captions
 from app.layout.columns import ReadingOrderResolver
 from app.layout.footnotes import as_footnote
 from app.layout.headers_footers import is_page_number, repeated_header_footer_ids
 from app.layout.headings import HeadingDetector
-from app.layout.paragraphs import ParagraphBuilder, list_item, table_from_line
+from app.layout.paragraphs import (
+    ParagraphBuilder,
+    list_item,
+    merge_page_continuations,
+    table_from_line,
+)
 
 
 class HeuristicLayoutAnalyzer:
@@ -85,6 +91,10 @@ class HeuristicLayoutAnalyzer:
             )
             elements.extend(self._insert_images(page_elements, page, options))
 
+        elements, merged_paragraphs = merge_page_continuations(
+            elements, {page.number: page.width for page in pages}
+        )
+        report.paragraphs_detected = max(0, report.paragraphs_detected - merged_paragraphs)
         elements = [
             element
             for element in associate_captions(elements)
@@ -152,7 +162,9 @@ class HeuristicLayoutAnalyzer:
             if detector.is_heading(block):
                 flush_paragraphs()
                 level = detector.level(block)
-                result.append(Heading(block.text, level, block.bbox, block.page_number))
+                result.append(
+                    Heading(normalize_text(block.text), level, block.bbox, block.page_number)
+                )
                 report.headings_detected += 1
                 index += 1
                 continue

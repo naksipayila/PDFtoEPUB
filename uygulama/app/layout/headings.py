@@ -30,7 +30,11 @@ class HeadingDetector:
     def is_heading(self, block: SourceTextBlock) -> bool:
         """Favor false negatives over turning ordinary body text into headings."""
         text = block.text.strip()
-        if not text or len(text) > self._config.maximum_length or text.endswith((".", ";", ",")):
+        if (
+            not text
+            or len(text) > self._config.maximum_length
+            or text.endswith((".", ";", ",", "-", "\u00ad"))
+        ):
             return False
         numbered = bool(_NUMBERED.match(text))
         upper_case = len(text) > 3 and text.isupper()

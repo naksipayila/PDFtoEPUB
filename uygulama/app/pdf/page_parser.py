@@ -182,7 +182,9 @@ def _line_text(line: dict) -> str:
     spans = line.get("spans", [])
     chars = [char for span in spans for char in span.get("chars", [])]
     if not chars:
-        return normalize_text("".join(span.get("text", "") for span in spans))
+        return normalize_text(
+            "".join(span.get("text", "") for span in spans), preserve_soft_hyphen=True
+        )
 
     space_widths = [
         char["bbox"][2] - char["bbox"][0]
@@ -209,4 +211,4 @@ def _line_text(line: dict) -> str:
         result.append(value)
         if bbox is not None:
             previous = bbox
-    return normalize_text("".join(result))
+    return normalize_text("".join(result), preserve_soft_hyphen=True)

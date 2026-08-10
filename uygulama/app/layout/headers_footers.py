@@ -12,8 +12,19 @@ from app.core.config import HeaderFooterConfig
 from app.core.models import ParsedPage, SourceTextBlock
 from app.core.normalizer import normalize_text
 
-_PAGE_NUMBER = re.compile(r"^(?:page\s*)?[-–—]?\s*\d+\s*[-–—]?$", re.IGNORECASE)
 _VARIABLE_NUMBER = re.compile(r"(?<!\w)\d+(?!\w)")
+_PAGE_LABEL = re.compile(r"^(?:page|sayfa|p|s)\.?\s*", re.IGNORECASE)
+_PAGE_NUMBER_CHARS = str.maketrans(
+    {
+        "ı": "1",
+        "i": "1",
+        "l": "1",
+        "j": "3",
+        "o": "0",
+        "s": "8",
+        "b": "8",
+    }
+)
 
 
 def repeated_header_footer_ids(
@@ -33,7 +44,7 @@ def repeated_header_footer_ids(
         for block in page.text_blocks:
             zone = _edge_zone(block, page, config)
             normalized = normalize_text(block.text).casefold()
-            if zone is None or not normalized or _PAGE_NUMBER.match(normalized):
+            if zone is None or not normalized or _looks_like_page_number(normalized):
                 continue
             signature = _header_signature(normalized)
             if not signature:
@@ -82,7 +93,7 @@ def _body_font_size(pages: list[ParsedPage]) -> float:
         block.font_size
         for page in pages
         for block in page.text_blocks
-        if normalize_text(block.text) and not _PAGE_NUMBER.match(normalize_text(block.text))
+        if normalize_text(block.text) and not _looks_like_page_number(normalize_text(block.text))
     ]
     return median(font_sizes) if font_sizes else 0
 
@@ -136,7 +147,27 @@ def _similar_signature(left: str, right: str) -> bool:
     return SequenceMatcher(None, left, right).ratio() >= 0.85
 
 
-def is_page_number(block: SourceTextBlock, page: ParsedPage) -> bool:
+def is_page_number(
+    block: SourceTextBlock, page: ParsedPage, config: HeaderFooterConfig | None = None
+) -> bool:
     """Restrict page-number removal to conventional edge-positioned labels."""
-    at_edge = block.bbox.y0 <= page.height * 0.14 or block.bbox.y1 >= page.height * 0.86
-    return at_edge and bool(_PAGE_NUMBER.match(block.text.strip()))
+    config = config or HeaderFooterConfig()
+    at_edge = _edge_zone(block, page, config) is not None
+    return at_edge and _looks_like_page_number(block.text)
+
+
+def _looks_like_page_number(value: str) -> bool:
+    """Recognize clean and common OCR-corrupted page-number labels."""
+    normalized = normalize_text(value).casefold()
+    normalized = normalized.strip("-\u2013\u2014()[]{}., ")
+    normalized = _PAGE_LABEL.sub("", normalized).strip("-\u2013\u2014()[]{}., ")
+    if not normalized:
+        return False
+
+    normalized = re.sub(r"\s*/\s*", "/", normalized)
+    parts = normalized.split("/")
+    for part in parts:
+        compact = re.sub(r"\s+", "", part).translate(_PAGE_NUMBER_CHARS)
+        if not compact.isdigit() or not 1 <= len(compact) <= 4:
+            return False
+    return len(parts) <= 2

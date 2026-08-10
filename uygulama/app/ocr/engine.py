@@ -112,7 +112,7 @@ def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:
     ordered = sorted(indexes, key=lambda index: (ocr_data["left"][index], index))
     tokens = [
         (
-            normalize_text(ocr_data["text"][index]),
+            normalize_text(ocr_data["text"][index], preserve_soft_hyphen=True),
             float(ocr_data["left"][index]),
             float(ocr_data["left"][index] + ocr_data["width"][index]),
             float(ocr_data["height"][index]),
@@ -135,7 +135,7 @@ def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:
         if previous_text[-1:] in "([{\"'“‘" or current_text[:1] in ".,;:!?)]}%»”’":
             needs_space = False
         text += (" " if needs_space else "") + current_text
-    return normalize_text(text)
+    return normalize_text(text, preserve_soft_hyphen=True)
 
 
 def _find_tesseract() -> str | None:
