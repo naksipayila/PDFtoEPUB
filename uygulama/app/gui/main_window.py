@@ -5,16 +5,21 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, QUrl
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication
+from PySide6.QtCore import QFileInfo, QSettings, QStandardPaths, Qt, QUrl, Signal
+from PySide6.QtGui import (
+    QDesktopServices,
+    QDragEnterEvent,
+    QDragLeaveEvent,
+    QDropEvent,
+    QGuiApplication,
+)
 from PySide6.QtWidgets import (
-    QFileDialog,
-    QGridLayout,
+    QFileIconProvider,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLayout,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -32,6 +37,91 @@ from app.gui.workers.conversion_worker import ConversionWorker
 from app.pdf.reader import PdfReader
 
 
+class PdfDropZone(QFrame):
+    """Visual PDF target that reports a dropped local PDF path."""
+
+    pdf_dropped = Signal(object)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setAcceptDrops(True)
+        self.setObjectName("pdfDropZone")
+        self.setMinimumHeight(170)
+        self.setProperty("dragActive", False)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._icon_label = QLabel("PDF")
+        self._icon_label.setObjectName("pdfDropIcon")
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon_label.setFixedSize(72, 72)
+
+        self._name_label = QLabel("PDF dosyasını buraya sürükleyin")
+        self._name_label.setObjectName("pdfDropTitle")
+        self._name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._name_label.setWordWrap(True)
+
+        self._hint_label = QLabel("Bıraktığınızda dönüşüm otomatik başlar")
+        self._hint_label.setObjectName("pdfDropHint")
+        self._hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(self._icon_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._name_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._hint_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def set_pdf(self, path: Path) -> None:
+        icon = QFileIconProvider().icon(QFileInfo(str(path)))
+        pixmap = icon.pixmap(64, 64)
+        if pixmap.isNull():
+            self._icon_label.setText("PDF")
+        else:
+            self._icon_label.setText("")
+            self._icon_label.setPixmap(pixmap)
+        self._name_label.setText(path.name)
+        self._hint_label.setText("Dönüşüm başlatılıyor...")
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if self._pdf_path(event) is not None:
+            event.acceptProposedAction()
+            self._set_drag_active(True)
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:  # noqa: N802
+        self._set_drag_active(False)
+        event.accept()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        self._set_drag_active(False)
+        path = self._pdf_path(event)
+        if path is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.pdf_dropped.emit(path)
+
+    @staticmethod
+    def _pdf_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
+        for url in event.mimeData().urls():
+            if not url.isLocalFile():
+                continue
+            path = Path(url.toLocalFile())
+            if path.is_file() and path.suffix.lower() == ".pdf":
+                return path
+        return None
+
+    def _set_drag_active(self, active: bool) -> None:
+        if self.property("dragActive") == active:
+            return
+        self.setProperty("dragActive", active)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
+
 class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
@@ -42,11 +132,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._settings = QSettings("PDFtoEPUB", "PDFtoEPUB")
         self._worker: ConversionWorker | None = None
+        self._input_path: Path | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF to EPUB Converter")
         self.setMinimumSize(720, 460)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
-        self.setAcceptDrops(True)
         self._build_interface()
         self._restore_settings()
 
@@ -86,16 +176,12 @@ class MainWindow(QMainWindow):
         self.open_folder_button.setEnabled(False)
         self.cancel_button = QPushButton("İptal")
         self.cancel_button.setEnabled(False)
-        self.convert_button = QPushButton("EPUB'e Dönüştür")
-        self.convert_button.setObjectName("convertButton")
         button_row.addWidget(self.open_epub_button)
         button_row.addWidget(self.open_folder_button)
         button_row.addStretch()
         button_row.addWidget(self.cancel_button)
-        button_row.addWidget(self.convert_button)
         layout.addLayout(button_row)
 
-        self.convert_button.clicked.connect(self._start_conversion)
         self.cancel_button.clicked.connect(self._cancel_conversion)
         self.open_epub_button.clicked.connect(self._open_epub)
         self.open_folder_button.clicked.connect(self._open_folder)
@@ -104,32 +190,13 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        input_group = QGroupBox("Girdi PDF")
-        input_layout = QGridLayout(input_group)
-        self.input_edit = QLineEdit()
-        self.input_edit.setPlaceholderText("PDF dosyasını buraya bırakın veya seçin")
-        browse_input = QPushButton("Gözat...")
-        input_label = QLabel("PDF dosyası")
-        input_layout.addWidget(input_label, 0, 0)
-        input_layout.addWidget(self.input_edit, 0, 1)
-        input_layout.addWidget(browse_input, 0, 2)
+        input_group = QGroupBox("PDF Seçimi")
+        input_layout = QVBoxLayout(input_group)
+        self.drop_zone = PdfDropZone()
+        input_layout.addWidget(self.drop_zone)
         layout.addWidget(input_group)
-
-        browse_input.clicked.connect(self._browse_input)
+        self.drop_zone.pdf_dropped.connect(self._set_input)
         return panel
-
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
-        urls = event.mimeData().urls()
-        if urls and any(url.toLocalFile().lower().endswith(".pdf") for url in urls):
-            event.acceptProposedAction()
-
-    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
-        for url in event.mimeData().urls():
-            path = Path(url.toLocalFile())
-            if path.suffix.lower() == ".pdf":
-                self._set_input(path)
-                event.acceptProposedAction()
-                return
 
     def closeEvent(self, event: object) -> None:  # noqa: N802
         self._save_settings()
@@ -138,23 +205,16 @@ class MainWindow(QMainWindow):
             self._worker.wait(3000)
         super().closeEvent(event)  # type: ignore[arg-type]
 
-    def _browse_input(self) -> None:
-        start = self._settings.value("last_input_dir", str(Path.home()))
-        selected, _ = QFileDialog.getOpenFileName(
-            self, "PDF Seç", str(start), "PDF dosyaları (*.pdf)"
-        )
-        if selected:
-            self._set_input(Path(selected))
-
     def _set_input(self, path: Path) -> None:
         if self._worker and self._worker.isRunning():
             return
-        self.input_edit.setText(str(path))
+        self._input_path = path
+        self.drop_zone.set_pdf(path)
         self._start_conversion()
 
     def _start_conversion(self) -> None:
-        input_path = Path(self.input_edit.text().strip())
-        if not input_path.is_file() or input_path.suffix.lower() != ".pdf":
+        input_path = self._input_path
+        if input_path is None or not input_path.is_file() or input_path.suffix.lower() != ".pdf":
             self._show_error("Geçerli bir PDF dosyası seçin.")
             return
         output_dir = _downloads_directory()
@@ -223,7 +283,6 @@ class MainWindow(QMainWindow):
         self._append_log("Dönüştürme kullanıcı tarafından iptal edildi.")
 
     def _set_running(self, running: bool) -> None:
-        self.convert_button.setEnabled(not running)
         self.cancel_button.setEnabled(running)
 
     def _open_epub(self) -> None:
@@ -267,9 +326,8 @@ class MainWindow(QMainWindow):
         self.move(frame.topLeft())
 
     def _save_settings(self) -> None:
-        input_path = Path(self.input_edit.text())
-        if input_path.is_file():
-            self._settings.setValue("last_input_dir", str(input_path.parent))
+        if self._input_path and self._input_path.is_file():
+            self._settings.setValue("last_input_dir", str(self._input_path.parent))
         self._settings.setValue("geometry", self.saveGeometry())
 
     def _apply_theme(self) -> None:
@@ -299,16 +357,14 @@ def _epub_filename(input_path: Path) -> str:
     return f"{_safe_filename(title)}-EPUB.epub"
 
 
-_COMMON_STYLE = """
-QPushButton#convertButton { font-weight: 700; padding: 7px 16px; }
-"""
-_DARK_STYLE = (
-    _COMMON_STYLE
-    + """
+_DARK_STYLE = """
 QMainWindow, QWidget { background: #20242a; color: #e8eaed; }
 QGroupBox { border: 1px solid #4e5661; border-radius: 6px; margin-top: 7px; padding: 6px; }
-QLineEdit, QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
+QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
+QFrame#pdfDropZone { background: #2b3038; border: 2px dashed #58616d; border-radius: 10px; }
+QFrame#pdfDropZone[dragActive="true"] { background: #263849; border-color: #2f81c1; }
+QLabel#pdfDropIcon { color: #8fa4b8; font-size: 20px; font-weight: 700; }
+QLabel#pdfDropTitle { color: #f2f4f7; font-size: 15px; font-weight: 700; }
+QLabel#pdfDropHint { color: #aab3bf; }
 QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 5px; }
-QPushButton#convertButton { background: #2f81c1; color: white; border: 0; border-radius: 6px; }
 """
-)
