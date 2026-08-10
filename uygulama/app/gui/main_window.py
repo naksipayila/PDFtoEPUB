@@ -144,8 +144,6 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
-        layout.addWidget(self._create_header())
-
         self._source_panel = self._create_source_panel()
         self._source_panel.setMinimumWidth(320)
         layout.addWidget(self._source_panel)
@@ -210,21 +208,6 @@ class MainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self._cancel_conversion)
         self.open_epub_button.clicked.connect(self._open_epub)
         self.open_folder_button.clicked.connect(self._open_folder)
-
-    def _create_header(self) -> QWidget:
-        header = QWidget()
-        header.setObjectName("appHeader")
-        layout = QVBoxLayout(header)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
-
-        brand_label = QLabel("PDFtoEPUB")
-        brand_label.setObjectName("appBrand")
-        tagline_label = QLabel("PDF'i bırakın, okunabilir EPUB'ı alın.")
-        tagline_label.setObjectName("appTagline")
-        layout.addWidget(brand_label)
-        layout.addWidget(tagline_label)
-        return header
 
     def _create_source_panel(self) -> QWidget:
         panel = QWidget()
@@ -429,8 +412,6 @@ QMainWindow { background: #0e141b; }
 QWidget { background: transparent; color: #edf3f7; }
 QWidget#centralWidget { background: #151d26; }
 QLabel { background: transparent; }
-QLabel#appBrand { color: #f3f7f9; font-size: 21px; font-weight: 800; }
-QLabel#appTagline { color: #8fa1b2; font-size: 12px; }
 QFrame#pdfDropZone { background: #1b2530; border: 1px dashed #526273; border-radius: 16px; }
 QFrame#pdfDropZone:hover { border-color: #708496; }
 QFrame#pdfDropZone[dragActive="true"] { background: #17323a; border-color: #5bd6d2; }
