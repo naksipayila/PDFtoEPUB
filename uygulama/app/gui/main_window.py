@@ -16,7 +16,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QFileIconProvider,
     QFrame,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLayout,
@@ -152,7 +151,7 @@ class MainWindow(QMainWindow):
         self._source_panel.setMinimumWidth(320)
         layout.addWidget(self._source_panel)
 
-        progress_group = QGroupBox()
+        progress_group = QWidget()
         progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         progress_layout = QVBoxLayout(progress_group)
         self.status_label = QLabel()
@@ -191,7 +190,7 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        input_group = QGroupBox()
+        input_group = QWidget()
         input_layout = QVBoxLayout(input_group)
         self.drop_zone = PdfDropZone()
         input_layout.addWidget(self.drop_zone)
