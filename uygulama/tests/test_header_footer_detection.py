@@ -55,6 +55,79 @@ def test_detects_repeated_header_with_changing_page_number() -> None:
     assert removed == {"variable-header-1", "variable-header-2", "variable-header-3"}
 
 
+def test_detects_variable_running_headers_with_a_shared_margin_style() -> None:
+    running_headers = ("Author name", "Spring story", "Autumn tale", "Winter note")
+    pages = [
+        ParsedPage(
+            number=index,
+            width=600,
+            height=800,
+            text_blocks=[
+                source_block(
+                    running_headers[index - 1],
+                    page=index,
+                    y0=22,
+                    y1=34,
+                    font_size=8,
+                    identifier=f"running-header-{index}",
+                ),
+                source_block(f"Unique {index}", page=index, y0=160, y1=172),
+            ],
+        )
+        for index in range(1, 5)
+    ]
+
+    removed = repeated_header_footer_ids(pages)
+
+    assert removed == {
+        "running-header-1",
+        "running-header-2",
+        "running-header-3",
+        "running-header-4",
+    }
+
+
+def test_keeps_large_repeated_top_headings() -> None:
+    running_headers = ("Author name", "Spring story", "Autumn tale", "Winter note")
+    chapter_titles = ("First arrival", "Stormy night", "Silent train", "Final letter")
+    pages = [
+        ParsedPage(
+            number=index,
+            width=600,
+            height=800,
+            text_blocks=[
+                source_block(
+                    running_headers[index - 1],
+                    page=index,
+                    y0=22,
+                    y1=34,
+                    font_size=8,
+                    identifier=f"running-header-{index}",
+                ),
+                source_block(
+                    chapter_titles[index - 1],
+                    page=index,
+                    y0=56,
+                    y1=76,
+                    font_size=20,
+                    identifier=f"chapter-{index}",
+                ),
+                source_block(f"Unique {index}", page=index, y0=160, y1=172),
+            ],
+        )
+        for index in range(1, 5)
+    ]
+
+    removed = repeated_header_footer_ids(pages)
+
+    assert removed == {
+        "running-header-1",
+        "running-header-2",
+        "running-header-3",
+        "running-header-4",
+    }
+
+
 def test_analyzer_excludes_repeated_header_blocks() -> None:
     pages = [
         ParsedPage(

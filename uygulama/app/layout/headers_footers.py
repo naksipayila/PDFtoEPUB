@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from difflib import SequenceMatcher
 from math import ceil
+from statistics import median
 
 from app.core.config import HeaderFooterConfig
 from app.core.models import ParsedPage, SourceTextBlock
@@ -22,7 +24,11 @@ def repeated_header_footer_ids(
     if len(pages) < config.minimum_repeated_pages:
         return set()
 
+    body_font_size = _body_font_size(pages)
     groups: list[tuple[str, str, list[SourceTextBlock], set[int]]] = []
+    style_groups: dict[
+        tuple[str, int, int, str, bool, bool], tuple[list[SourceTextBlock], set[int]]
+    ] = defaultdict(lambda: ([], set()))
     for page in pages:
         for block in page.text_blocks:
             zone = _edge_zone(block, page, config)
@@ -40,16 +46,45 @@ def repeated_header_footer_ids(
             else:
                 groups.append((zone, signature, [block], {page.number}))
 
+            if (
+                block.font_size < body_font_size
+                and _is_in_style_detection_margin(block, page, zone, config)
+            ):
+                blocks, page_numbers = style_groups[_margin_style_key(block, page, zone)]
+                blocks.append(block)
+                page_numbers.add(page.number)
+
     threshold = max(
         config.minimum_repeated_pages,
         ceil(len(pages) * config.minimum_frequency),
     )
-    return {
+    repeated_ids = {
         block.id
         for _, _, blocks, page_numbers in groups
         if len(page_numbers) >= threshold
         for block in blocks
     }
+    style_threshold = max(
+        config.minimum_repeated_pages,
+        ceil(len(pages) * config.style_detection_minimum_frequency),
+    )
+    repeated_ids.update(
+        block.id
+        for blocks, page_numbers in style_groups.values()
+        if len(page_numbers) >= style_threshold
+        for block in blocks
+    )
+    return repeated_ids
+
+
+def _body_font_size(pages: list[ParsedPage]) -> float:
+    font_sizes = [
+        block.font_size
+        for page in pages
+        for block in page.text_blocks
+        if normalize_text(block.text) and not _PAGE_NUMBER.match(normalize_text(block.text))
+    ]
+    return median(font_sizes) if font_sizes else 0
 
 
 def _edge_zone(
@@ -60,6 +95,32 @@ def _edge_zone(
     if block.bbox.y1 >= page.height * (1 - config.edge_ratio):
         return "bottom"
     return None
+
+
+def _is_in_style_detection_margin(
+    block: SourceTextBlock, page: ParsedPage, zone: str, config: HeaderFooterConfig
+) -> bool:
+    if zone == "top":
+        return block.bbox.y0 <= page.height * config.style_detection_edge_ratio
+    return block.bbox.y1 >= page.height * (1 - config.style_detection_edge_ratio)
+
+
+def _margin_style_key(
+    block: SourceTextBlock, page: ParsedPage, zone: str
+) -> tuple[str, int, int, str, bool, bool]:
+    margin_offset = (
+        block.bbox.y0 / page.height
+        if zone == "top"
+        else (page.height - block.bbox.y1) / page.height
+    )
+    return (
+        zone,
+        int(margin_offset / 0.02),
+        round(block.font_size),
+        block.font_name.casefold(),
+        block.bold,
+        block.italic,
+    )
 
 
 def _header_signature(value: str) -> str:

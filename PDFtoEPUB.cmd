@@ -1,24 +1,10 @@
 @echo off
 setlocal EnableExtensions DisableDelayedExpansion
+chcp 65001 >nul
 
 title PDF to EPUB
 
 if not defined LOCALAPPDATA set "LOCALAPPDATA=%USERPROFILE%\AppData\Local"
-
-set "CENTER_SCRIPT=%~dp0uygulama\ortala-konsol.ps1"
-if exist "%CENTER_SCRIPT%" goto :center_local
-
-set "CENTER_SCRIPT=%TEMP%\PDFtoEPUB-center-%RANDOM%-%RANDOM%.ps1"
-set "PDFTOEPUB_CENTER_SCRIPT=%CENTER_SCRIPT%"
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/naksipayila/PDFtoEPUB/main/uygulama/ortala-konsol.ps1' -OutFile $env:PDFTOEPUB_CENTER_SCRIPT" >nul 2>&1
-if exist "%CENTER_SCRIPT%" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%CENTER_SCRIPT%" >nul 2>&1
-if exist "%CENTER_SCRIPT%" del /f /q "%CENTER_SCRIPT%" >nul 2>&1
-goto :center_done
-
-:center_local
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%CENTER_SCRIPT%" >nul 2>&1
-
-:center_done
 
 set "APP_ROOT=%LOCALAPPDATA%\PDFtoEPUB"
 set "STAGING_ROOT=%TEMP%\PDFtoEPUB-%RANDOM%-%RANDOM%"
@@ -30,7 +16,7 @@ set "PDFTOEPUB_SOURCE=%SOURCE_ARCHIVE_ROOT%"
 if not exist "%STAGING_ROOT%" mkdir "%STAGING_ROOT%" >nul 2>&1
 if not exist "%STAGING_ROOT%" goto :fail
 
-echo PDFtoEPUB GitHub surumu indiriliyor...
+echo Güncel sürüm kontrol ediliyor...
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/naksipayila/PDFtoEPUB/archive/refs/heads/main.zip' -OutFile $env:PDFTOEPUB_ARCHIVE; Expand-Archive -LiteralPath $env:PDFTOEPUB_ARCHIVE -DestinationPath $env:PDFTOEPUB_SOURCE -Force"
 if errorlevel 1 goto :fail
 
