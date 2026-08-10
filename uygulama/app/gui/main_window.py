@@ -45,18 +45,18 @@ class PdfDropZone(QFrame):
         super().__init__()
         self.setAcceptDrops(True)
         self.setObjectName("pdfDropZone")
-        self.setMinimumHeight(170)
+        self.setMinimumHeight(132)
         self.setProperty("dragActive", False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(6)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._icon_label = QLabel("PDF")
         self._icon_label.setObjectName("pdfDropIcon")
         self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._icon_label.setFixedSize(72, 72)
+        self._icon_label.setFixedSize(60, 60)
 
         self._name_label = QLabel("PDF dosyasını buraya sürükleyin")
         self._name_label.setObjectName("pdfDropTitle")
@@ -73,7 +73,7 @@ class PdfDropZone(QFrame):
 
     def set_pdf(self, path: Path) -> None:
         icon = QFileIconProvider().icon(QFileInfo(str(path)))
-        pixmap = icon.pixmap(64, 64)
+        pixmap = icon.pixmap(52, 52)
         if pixmap.isNull():
             self._icon_label.setText("PDF")
         else:
@@ -124,8 +124,8 @@ class PdfDropZone(QFrame):
 class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
-    _DEFAULT_WIDTH = 720
-    _DEFAULT_HEIGHT = 460
+    _DEFAULT_WIDTH = 680
+    _DEFAULT_HEIGHT = 420
 
     def __init__(self) -> None:
         super().__init__()
@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         self._input_path: Path | None = None
         self._last_output: Path | None = None
         self.setWindowTitle("PDF to EPUB Converter")
-        self.setMinimumSize(720, 460)
+        self.setMinimumSize(680, 420)
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self._build_interface()
         self._restore_settings()
@@ -143,8 +143,8 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(14, 14, 14, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
         layout.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
 
         self._source_panel = self._create_source_panel()
@@ -154,6 +154,7 @@ class MainWindow(QMainWindow):
         progress_group = QWidget()
         progress_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         progress_layout = QVBoxLayout(progress_group)
+        progress_layout.setContentsMargins(0, 0, 0, 0)
         self.status_label = QLabel()
         self.status_label.setVisible(False)
         self.progress_bar = QProgressBar()
@@ -162,7 +163,7 @@ class MainWindow(QMainWindow):
         self.log_panel = QPlainTextEdit()
         self.log_panel.setReadOnly(True)
         self.log_panel.setMaximumBlockCount(500)
-        self.log_panel.setFixedHeight(140)
+        self.log_panel.setFixedHeight(110)
         self.log_panel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         progress_layout.addWidget(self.status_label)
         progress_layout.addWidget(self.progress_bar)
@@ -192,6 +193,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         input_group = QWidget()
         input_layout = QVBoxLayout(input_group)
+        input_layout.setContentsMargins(0, 0, 0, 0)
         self.drop_zone = PdfDropZone()
         input_layout.addWidget(self.drop_zone)
         layout.addWidget(input_group)
@@ -363,12 +365,14 @@ def _epub_filename(input_path: Path) -> str:
 
 _DARK_STYLE = """
 QMainWindow, QWidget { background: #20242a; color: #e8eaed; }
-QGroupBox { border: 1px solid #4e5661; border-radius: 6px; margin-top: 7px; padding: 6px; }
-QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 4px; padding: 3px 5px; color: #f2f4f7; }
-QFrame#pdfDropZone { background: #2b3038; border: 2px dashed #58616d; border-radius: 10px; }
+QLabel { background: transparent; }
+QPlainTextEdit { background: #2b3038; border: 1px solid #58616d; border-radius: 5px; padding: 3px 5px; color: #f2f4f7; }
+QProgressBar { background: #20242a; border: 1px solid #323943; border-radius: 4px; height: 18px; text-align: center; color: #e8eaed; }
+QProgressBar::chunk { background: #2f81c1; border-radius: 3px; }
+QFrame#pdfDropZone { background: #20242a; border: 1px dashed #58616d; border-radius: 9px; }
 QFrame#pdfDropZone[dragActive="true"] { background: #263849; border-color: #2f81c1; }
 QLabel#pdfDropIcon { color: #8fa4b8; font-size: 20px; font-weight: 700; }
 QLabel#pdfDropTitle { color: #f2f4f7; font-size: 15px; font-weight: 700; }
 QLabel#pdfDropHint { color: #aab3bf; }
-QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 5px; }
+QPushButton { background: #333a44; border: 1px solid #58616d; border-radius: 5px; padding: 4px 8px; }
 """
