@@ -7,7 +7,8 @@ $requirements = Join-Path $projectRoot "runtime-requirements.txt"
 $pythonVersion = "3.12.10"
 $pythonPackageUrl = "https://api.nuget.org/v3-flatcontainer/python/$pythonVersion/python.$pythonVersion.nupkg"
 $tesseractInstallerUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
-$turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/tur.traineddata"
+$turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/tur.traineddata"
+$turkishDataVersion = "tessdata_best"
 $ProgressPreference = "Continue"
 
 Set-Location -LiteralPath $projectRoot
@@ -286,16 +287,23 @@ function Ensure-Tesseract {
     if (-not $tesseract) {
         throw "Tesseract kurulumu tamamlandi ancak tesseract.exe bulunamadi."
     }
+    $env:PDFTOEPUB_TESSERACT = $tesseract
 
     $localTesseractRoot = Join-Path $runtimeRoot "tesseract"
     $localTessdata = Join-Path $localTesseractRoot "tessdata"
     $turkishData = Join-Path $localTessdata "tur.traineddata"
-    if (-not (Test-Path -LiteralPath $turkishData)) {
+    $turkishDataMarker = Join-Path $localTessdata "tur.model"
+    $installedModelVersion = ""
+    if (Test-Path -LiteralPath $turkishDataMarker) {
+        $installedModelVersion = (Get-Content -LiteralPath $turkishDataMarker -Raw).Trim()
+    }
+    if (-not (Test-Path -LiteralPath $turkishData) -or $installedModelVersion -ne $turkishDataVersion) {
         New-Item -ItemType Directory -Path $localTessdata -Force | Out-Null
         Write-Host "Turkce OCR verisi indiriliyor..."
         Download-WithProgress $turkishDataUrl $turkishData "Turkce OCR verisi indiriliyor"
+        [IO.File]::WriteAllText($turkishDataMarker, $turkishDataVersion)
     }
-    $env:TESSDATA_PREFIX = $localTesseractRoot
+    $env:TESSDATA_PREFIX = $localTessdata
     return $tesseract
 }
 

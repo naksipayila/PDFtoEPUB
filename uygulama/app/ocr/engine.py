@@ -4,25 +4,33 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 
 import pymupdf as fitz
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageOps
 
 from app.core.models import BoundingBox, SourceTextBlock
 from app.core.normalizer import normalize_text
 
 LOGGER = logging.getLogger(__name__)
+OCR_DPI = 300.0
 
 
 class OcrEngine:
-    """Performs OCR only when Tesseract is installed and a page lacks text."""
+    """Run local Tesseract OCR for textless and scanned pages."""
 
-    def available(self) -> bool:
+    def available(self, language: str | None = None) -> bool:
         try:
-            self._tesseract().get_tesseract_version()
+            pytesseract = self._tesseract()
+            pytesseract.get_tesseract_version()
         except (ImportError, OSError, RuntimeError):
             return False
-        return True
+        if not language:
+            return True
+        try:
+            return language in pytesseract.get_languages(config="")
+        except pytesseract.TesseractError:
+            return False
 
     def extract_page(
         self, page: fitz.Page, page_number: int, language: str
@@ -30,16 +38,16 @@ class OcrEngine:
         """Render and OCR a page, returning conservative line-level blocks."""
         pytesseract = self._tesseract()
 
-        pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+        scale = OCR_DPI / 72.0
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
         image = Image.open(io.BytesIO(pixmap.tobytes("png")))
         image = self._preprocess(image)
         ocr_data = pytesseract.image_to_data(
             image,
             lang=language,
             output_type=pytesseract.Output.DICT,
-            config="--psm 3",
+            config=f"--oem 1 --psm 3 --dpi {int(OCR_DPI)}",
         )
-        scale = 2.0
         lines: dict[tuple[int, int, int], list[int]] = {}
         for index, text in enumerate(ocr_data["text"]):
             if normalize_text(text):
@@ -81,12 +89,15 @@ class OcrEngine:
     def _tesseract():
         import pytesseract
 
+        command = os.environ.get("PDFTOEPUB_TESSERACT")
+        if command:
+            pytesseract.pytesseract.tesseract_cmd = command
         return pytesseract
 
     @staticmethod
     def _preprocess(image: Image.Image) -> Image.Image:
         grayscale = ImageOps.grayscale(image)
-        return ImageEnhance.Contrast(grayscale).enhance(1.5)
+        return ImageOps.autocontrast(grayscale)
 
 
 def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:

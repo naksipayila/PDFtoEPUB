@@ -32,17 +32,26 @@ class PageParser:
         ocr_language: str,
         include_images: bool = True,
     ) -> ParsedPage:
-        """Extract text at line granularity, falling back to OCR for image-only pages."""
+        """Extract text and replace unreliable hidden OCR on scanned pages."""
         rectangle = page.rect
+        images = self._image_extractor.extract_page(page, page_number) if include_images else []
         blocks = self._extract_text(page, page_number)
         ocr_used = False
-        if not blocks and use_ocr and self._ocr_engine and self._ocr_engine.available():
-            blocks = self._ocr_engine.extract_page(page, page_number, ocr_language)
-            ocr_used = bool(blocks)
-        elif not blocks and use_ocr:
-            LOGGER.warning("Page %s has no text but Tesseract OCR is unavailable", page_number)
+        is_scanned_page = _page_has_background_image(page, rectangle.width, rectangle.height)
+        ocr_available = bool(
+            use_ocr and self._ocr_engine and self._ocr_engine.available(ocr_language)
+        )
+        if use_ocr and ocr_available and (not blocks or is_scanned_page):
+            ocr_blocks = self._ocr_engine.extract_page(page, page_number, ocr_language)
+            if ocr_blocks:
+                blocks = ocr_blocks
+                ocr_used = True
+        elif use_ocr and (not blocks or is_scanned_page):
+            LOGGER.warning(
+                "Page %s has no usable OCR language data; keeping the extracted text",
+                page_number,
+            )
 
-        images = self._image_extractor.extract_page(page, page_number) if include_images else []
         if blocks:
             images = [
                 image
@@ -108,6 +117,22 @@ def _is_page_background(image: PositionedImage, page_width: float, page_height: 
         and bbox.x1 >= page_width - horizontal_margin
         and bbox.y1 >= page_height - vertical_margin
     )
+
+
+def _page_has_background_image(page: fitz.Page, page_width: float, page_height: float) -> bool:
+    """Identify scanned pages that may contain a low-quality hidden text layer."""
+    horizontal_margin = max(2.0, page_width * 0.02)
+    vertical_margin = max(2.0, page_height * 0.02)
+    for image_info in page.get_images(full=True):
+        for rectangle in page.get_image_rects(image_info[0]):
+            if (
+                rectangle.x0 <= horizontal_margin
+                and rectangle.y0 <= vertical_margin
+                and rectangle.x1 >= page_width - horizontal_margin
+                and rectangle.y1 >= page_height - vertical_margin
+            ):
+                return True
+    return False
 
 
 def _line_text(line: dict) -> str:

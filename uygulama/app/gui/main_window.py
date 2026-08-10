@@ -141,7 +141,7 @@ class MainWindow(QMainWindow):
         options_layout.setVerticalSpacing(4)
         self.option_checks: dict[str, QCheckBox] = {}
         checkboxes = (
-            ("use_ocr", "Metinsiz sayfalarda OCR kullan", True),
+            ("use_ocr", "Metinsiz veya taranmış sayfalarda OCR kullan", True),
             ("include_images", "Görselleri ekle", True),
             ("optimize_images", "Görselleri optimize et", True),
             ("remove_page_numbers", "Sayfa numaralarını kaldır", True),

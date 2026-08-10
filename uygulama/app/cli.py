@@ -18,7 +18,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("input", type=Path, help="source PDF file")
     parser.add_argument("-o", "--output", type=Path, help="target EPUB file")
     parser.add_argument(
-        "--ocr", action="store_true", help="use local Tesseract OCR for pages without text"
+        "--ocr",
+        action="store_true",
+        help="use local Tesseract OCR for textless or scanned pages",
     )
     parser.add_argument("--no-images", action="store_true", help="do not extract images")
     parser.add_argument("--keep-page-numbers", action="store_true", help="keep edge page numbers")
