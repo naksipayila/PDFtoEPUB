@@ -7,7 +7,7 @@ from statistics import median
 
 import pymupdf as fitz
 
-from app.core.models import BoundingBox, ParsedPage, SourceTextBlock
+from app.core.models import BoundingBox, ParsedPage, PositionedImage, SourceTextBlock
 from app.core.normalizer import normalize_text
 from app.ocr.engine import OcrEngine
 from app.pdf.images import ImageExtractor
@@ -42,12 +42,20 @@ class PageParser:
         elif not blocks and use_ocr:
             LOGGER.warning("Page %s has no text but Tesseract OCR is unavailable", page_number)
 
+        images = self._image_extractor.extract_page(page, page_number) if include_images else []
+        if blocks:
+            images = [
+                image
+                for image in images
+                if not _is_page_background(image, rectangle.width, rectangle.height)
+            ]
+
         return ParsedPage(
             number=page_number,
             width=rectangle.width,
             height=rectangle.height,
             text_blocks=blocks,
-            images=self._image_extractor.extract_page(page, page_number) if include_images else [],
+            images=images,
             ocr_used=ocr_used,
         )
 
@@ -87,6 +95,19 @@ class PageParser:
 
 def _span_length(span: dict) -> int:
     return len(span.get("text", "")) or len(span.get("chars", []))
+
+
+def _is_page_background(image: PositionedImage, page_width: float, page_height: float) -> bool:
+    """Ignore rasterized page backgrounds when a text layer is available."""
+    bbox = image.bbox
+    horizontal_margin = max(2.0, page_width * 0.02)
+    vertical_margin = max(2.0, page_height * 0.02)
+    return (
+        bbox.x0 <= horizontal_margin
+        and bbox.y0 <= vertical_margin
+        and bbox.x1 >= page_width - horizontal_margin
+        and bbox.y1 >= page_height - vertical_margin
+    )
 
 
 def _line_text(line: dict) -> str:

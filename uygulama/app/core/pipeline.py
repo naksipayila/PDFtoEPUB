@@ -92,7 +92,18 @@ class ConversionPipeline:
 
             self._check_cancelled(is_cancelled)
             self._emit(progress, "layout", "Görsel yerleşim analiz ediliyor...")
-            analyzer = HeuristicLayoutAnalyzer(metadata, image_extractor.assets)
+            all_assets = image_extractor.assets
+            used_asset_ids = {
+                image.asset_id for page in pages for image in page.images
+            }
+            assets = {
+                asset_id: asset
+                for asset_id, asset in all_assets.items()
+                if asset_id in used_asset_ids
+            }
+            if cover_asset_id is not None and cover_asset_id in all_assets:
+                assets[cover_asset_id] = all_assets[cover_asset_id]
+            analyzer = HeuristicLayoutAnalyzer(metadata, assets)
             document = analyzer.analyze(pages, options, report)
             document.cover_asset_id = cover_asset_id
             report.pages_processed = len(pages)
