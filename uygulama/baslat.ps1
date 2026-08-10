@@ -277,7 +277,7 @@ function Ensure-Tesseract {
             Download-WithProgress $tesseractInstallerUrl $installer "Tesseract OCR indiriliyor"
         }
         Write-Host "Tesseract OCR kuruluyor..."
-        $process = Start-Process -FilePath $installer -ArgumentList @("/S") -Wait -PassThru
+        $process = Start-Process -FilePath $installer -Wait -PassThru
         if ($process.ExitCode -ne 0) {
             throw "Tesseract kurulumu basarisiz oldu. Cikis kodu: $($process.ExitCode)"
         }

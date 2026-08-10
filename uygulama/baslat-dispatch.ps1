@@ -42,8 +42,8 @@ if (Test-Ready) {
 }
 
 $wtCommand = Get-Command wt.exe -ErrorAction SilentlyContinue
-$terminalScript = Join-Path $projectRoot "baslat-terminal.ps1"
-$terminalArguments = '-d "' + $projectRoot + '" powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $terminalScript + '"'
+$launcherScript = Join-Path $projectRoot "baslat.ps1"
+$terminalArguments = '-d "' + $projectRoot + '" powershell.exe -NoLogo -NoProfile -ExecutionPolicy RemoteSigned -File "' + $launcherScript + '"'
 
 if ($wtCommand) {
     try {
@@ -62,7 +62,7 @@ Start-Process -FilePath $windowsPowerShell -WorkingDirectory $projectRoot -Argum
     "-NoLogo",
     "-NoProfile",
     "-ExecutionPolicy",
-    "Bypass",
+    "RemoteSigned",
     "-File",
-    $terminalScript
+    $launcherScript
 ) -WindowStyle Normal -ErrorAction Stop
