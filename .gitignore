@@ -18,3 +18,6 @@ coverage/
 
 # Local project documentation
 docs/
+/AGENTS.md
+/PROGRESS.md
+/TODO.md
