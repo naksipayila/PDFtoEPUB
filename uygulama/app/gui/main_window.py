@@ -38,9 +38,9 @@ class MainWindow(QMainWindow):
     """Responsive desktop UI; all conversion work runs through ConversionWorker."""
 
     _NARROW_LAYOUT_BREAKPOINT = 760
-    _NARROW_MINIMUM_HEIGHT = 620
+    _NARROW_MINIMUM_HEIGHT = 506
     _DEFAULT_WIDTH = 720
-    _DEFAULT_HEIGHT = 620
+    _DEFAULT_HEIGHT = 506
 
     def __init__(self) -> None:
         super().__init__()
@@ -88,7 +88,6 @@ class MainWindow(QMainWindow):
         progress_layout.addWidget(self.progress_bar)
         progress_layout.addWidget(self.log_panel)
         layout.addWidget(progress_group)
-        layout.addStretch(1)
 
         button_row = QHBoxLayout()
         self.open_epub_button = QPushButton("EPUB'ı Aç")
