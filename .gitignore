@@ -1,14 +1,20 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.venv/
-.runtime/
-build/
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+
+# Common generated output
+node_modules/
 dist/
-*.spec.tmp
-*.epub
-*.pdf
-*.lnk
-pdf_to_epub.log
-debug/
+build/
+coverage/
+*.log
+
+# Local project documentation
+docs/
