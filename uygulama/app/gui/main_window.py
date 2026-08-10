@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
         self.resize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self._build_interface()
         self._restore_settings()
+        self.setFixedSize(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
 
     def _build_interface(self) -> None:
         central = QWidget()
