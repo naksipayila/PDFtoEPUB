@@ -5,7 +5,7 @@ from PIL import Image
 
 from app.core.errors import ConversionError
 from app.core.models import BoundingBox, PositionedImage
-from app.ocr.engine import OcrEngine
+from app.ocr.engine import OcrEngine, _parse_ocr_tsv
 from app.pdf.page_parser import PageParser
 from tests.conftest import source_block
 
@@ -133,3 +133,35 @@ def test_ocr_preprocessing_preserves_a_grayscale_image() -> None:
     processed = OcrEngine._preprocess(Image.new("RGB", (4, 4), "#808080"))
 
     assert processed.mode == "L"
+
+
+def test_ocr_availability_is_cached(monkeypatch, tmp_path) -> None:
+    tessdata = tmp_path / "tessdata"
+    tessdata.mkdir()
+    (tessdata / "tur.traineddata").write_bytes(b"model")
+    calls: list[bool] = []
+
+    monkeypatch.setattr(OcrEngine, "_tesseract", staticmethod(lambda: calls.append(True)))
+    monkeypatch.setattr("app.ocr.engine._find_tesseract", lambda: "tesseract.exe")
+    monkeypatch.setattr("app.ocr.engine._find_tessdata", lambda: tessdata)
+
+    engine = OcrEngine()
+
+    assert engine.available("tur")
+    assert engine.available("tur")
+    assert len(calls) == 1
+
+
+def test_ocr_tsv_parser_preserves_text_geometry() -> None:
+    tsv = (
+        "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight"
+        "\tconf\ttext\n"
+        "5\t1\t2\t3\t4\t1\t10\t20\t30\t40\t95.0\tMerhaba\n"
+    )
+
+    parsed = _parse_ocr_tsv(tsv)
+
+    assert parsed["text"] == ["Merhaba"]
+    assert parsed["block_num"] == [2]
+    assert parsed["left"] == [10]
+    assert parsed["height"] == [40]

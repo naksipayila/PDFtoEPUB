@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import io
 import logging
 import os
@@ -22,18 +23,31 @@ _RUNTIME_TESSDATA = Path(__file__).resolve().parents[2] / ".runtime" / "tesserac
 class OcrEngine:
     """Run local Tesseract OCR for textless and scanned pages."""
 
+    def __init__(self) -> None:
+        self._available_languages: dict[str, bool] = {}
+
     def available(self, language: str | None = None) -> bool:
+        cache_key = language or ""
+        cached = self._available_languages.get(cache_key)
+        if cached is not None:
+            return cached
         try:
-            pytesseract = self._tesseract()
-            pytesseract.get_tesseract_version()
+            self._tesseract()
+            command = _find_tesseract()
+            if not command:
+                available = False
+            elif not language:
+                available = True
+            else:
+                tessdata = _find_tessdata()
+                language_files = [f"{part}.traineddata" for part in language.split("+") if part]
+                available = bool(tessdata and language_files) and all(
+                    (tessdata / filename).is_file() for filename in language_files
+                )
         except (ImportError, OSError, RuntimeError):
-            return False
-        if not language:
-            return True
-        try:
-            return language in pytesseract.get_languages(config="")
-        except (OSError, RuntimeError):
-            return False
+            available = False
+        self._available_languages[cache_key] = available
+        return available
 
     def extract_page(
         self, page: fitz.Page, page_number: int, language: str
@@ -45,12 +59,13 @@ class OcrEngine:
         pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
         image = Image.open(io.BytesIO(pixmap.tobytes("png")))
         image = self._preprocess(image)
-        ocr_data = pytesseract.image_to_data(
+        ocr_tsv = pytesseract.run_and_get_output(
             image,
+            extension="tsv",
             lang=language,
-            output_type=pytesseract.Output.DICT,
-            config=f"--oem 1 --psm 3 --dpi {int(OCR_DPI)}",
+            config=f"-c tessedit_create_tsv=1 --oem 1 --psm 3 --dpi {int(OCR_DPI)}",
         )
+        ocr_data = _parse_ocr_tsv(ocr_tsv)
         lines: dict[tuple[int, int, int], list[int]] = {}
         for index, text in enumerate(ocr_data["text"]):
             if normalize_text(text):
@@ -136,6 +151,24 @@ def _join_ocr_words(ocr_data: dict[str, list], indexes: list[int]) -> str:
             needs_space = False
         text += (" " if needs_space else "") + current_text
     return normalize_text(text, preserve_soft_hyphen=True)
+
+
+def _parse_ocr_tsv(tsv: str) -> dict[str, list]:
+    """Parse Tesseract TSV without invoking its version probe for each page."""
+    numeric_columns = ("block_num", "par_num", "line_num", "left", "top", "width", "height")
+    result: dict[str, list] = {column: [] for column in (*numeric_columns, "text")}
+    for row in csv.DictReader(io.StringIO(tsv), delimiter="\t"):
+        for column in numeric_columns:
+            result[column].append(_tsv_integer(row.get(column)))
+        result["text"].append(row.get("text") or "")
+    return result
+
+
+def _tsv_integer(value: str | None) -> int:
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _find_tesseract() -> str | None:
