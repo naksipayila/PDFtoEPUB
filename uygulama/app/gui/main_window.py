@@ -147,7 +147,10 @@ class MainWindow(QMainWindow):
             self._set_input(Path(selected))
 
     def _set_input(self, path: Path) -> None:
+        if self._worker and self._worker.isRunning():
+            return
         self.input_edit.setText(str(path))
+        self._start_conversion()
 
     def _start_conversion(self) -> None:
         input_path = Path(self.input_edit.text().strip())
