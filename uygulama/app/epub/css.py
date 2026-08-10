@@ -8,12 +8,14 @@ def stylesheet(mode: str = "reader") -> str:
     base = """@charset \"utf-8\";
 html { font-size: 100%; }
 body { line-height: 1.5; margin: 5%; }
-h1, h2, h3, h4 { line-height: 1.2; margin: 1.5em 0 0.6em; page-break-after: avoid; }
+h1, h2, h3, h4 { font-weight: 700; line-height: 1.2; margin: 1.5em 0 0.6em; page-break-after: avoid; }
 p { margin: 0 0 0.8em; orphans: 2; widows: 2; }
 li { margin-bottom: 0.25em; }
 img { display: block; height: auto; margin: 0 auto; max-width: 100%; }
 figure { break-inside: avoid; margin: 1.2em auto; text-align: center; }
 figcaption { font-size: 0.9em; font-style: italic; margin-top: 0.45em; }
+aside { font-size: 0.9em; margin: 0.7em 0; }
+.footnote-label { font-weight: 700; }
 table { border-collapse: collapse; margin: 1em auto; max-width: 100%; }
 th, td { border: 1px solid #888; padding: 0.35em; vertical-align: top; }
 """

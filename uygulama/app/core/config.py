@@ -12,7 +12,7 @@ from app.core.models import DocumentMetadata
 class ConversionOptions:
     use_ocr: bool = True
     ocr_language: str = "tur"
-    include_images: bool = True
+    include_images: bool = False
     optimize_images: bool = True
     remove_page_numbers: bool = True
     remove_headers_footers: bool = True
@@ -29,7 +29,7 @@ class ConversionOptions:
 
 @dataclass(frozen=True, slots=True)
 class HeadingDetectionConfig:
-    minimum_relative_size: float = 1.15
+    minimum_relative_size: float = 1.2
     maximum_length: int = 130
     max_levels: int = 4
 
@@ -44,7 +44,7 @@ class ColumnDetectionConfig:
 
 @dataclass(frozen=True, slots=True)
 class ParagraphMergeConfig:
-    max_line_gap_factor: float = 1.85
+    max_line_gap_factor: float = 1.35
     indentation_tolerance_factor: float = 2.5
 
 

@@ -8,12 +8,20 @@ from app.core.config import ParagraphMergeConfig
 from app.core.models import ContentElement, Footnote, Paragraph, SourceTextBlock, TableBlock
 from app.core.normalizer import join_line_text, normalize_text
 
-_BULLET = re.compile(r"^[•\u2022\u25e6\u25aa\-–]\s+(.*)$")
+_BULLET = re.compile(r"^[•\u2022\u25e6\u25aa]\s+(.*)$")
 _ORDERED = re.compile(r"^\s*(\d+|[a-zA-Z])[.)]\s+(.*)$")
+
+
+def is_dialogue_start(value: str) -> bool:
+    """Recognize dialogue markers without discarding the original dash."""
+    value = value.lstrip()
+    return bool(value) and value[0] in "-–—"
 
 
 def list_item(block: SourceTextBlock) -> tuple[bool, str] | None:
     """Return ordered state and content for a conventional visual list item."""
+    if is_dialogue_start(block.text):
+        return None
     bullet = _BULLET.match(block.text)
     if bullet:
         return False, normalize_text(bullet.group(1))
@@ -52,6 +60,8 @@ class ParagraphBuilder:
         return paragraphs
 
     def _continues(self, previous: SourceTextBlock, current: SourceTextBlock) -> bool:
+        if is_dialogue_start(current.text):
+            return False
         if current.bbox.y0 < previous.bbox.y0 - previous.font_size * 0.25:
             return False
         gap = current.bbox.y0 - previous.bbox.y1
@@ -111,9 +121,8 @@ def _previous_paragraph_index(
     if elements and _is_small_image(elements[-1], page_widths):
         if len(elements) > 1 and isinstance(elements[-2], Paragraph):
             return len(elements) - 2
-    if isinstance(elements[-1], Footnote) and len(elements) > 1:
-        if isinstance(elements[-2], Paragraph):
-            return len(elements) - 2
+    if isinstance(elements[-1], Footnote):
+        return None
     return None
 
 
@@ -140,7 +149,7 @@ def _page_continues(
         return False
 
     current_text = current.text.lstrip()
-    if not current_text or not current_text[0].islower():
+    if not current_text or is_dialogue_start(current_text) or not current_text[0].islower():
         return False
     previous_text = previous.text.rstrip()
     if previous_text.endswith(("-", "\u00ad")):

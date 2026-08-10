@@ -10,6 +10,7 @@ from app.core.models import (
     ContentElement,
     ConversionReport,
     DocumentMetadata,
+    Footnote,
     Heading,
     ImageAsset,
     ImageBlock,
@@ -23,11 +24,12 @@ from app.core.models import (
 from app.core.normalizer import normalize_text
 from app.layout.captions import associate_captions
 from app.layout.columns import ReadingOrderResolver
-from app.layout.footnotes import as_footnote
+from app.layout.footnotes import extract_footnotes
 from app.layout.headers_footers import is_page_number, repeated_header_footer_ids
 from app.layout.headings import HeadingDetector
 from app.layout.paragraphs import (
     ParagraphBuilder,
+    is_dialogue_start,
     list_item,
     merge_page_continuations,
     table_from_line,
@@ -54,26 +56,51 @@ class HeuristicLayoutAnalyzer:
             repeated_header_footer_ids(pages) if options.remove_headers_footers else set()
         )
         report.headers_removed = len(removed_headers)
-        active_blocks = [
-            block
+        header_pages: list[tuple[ParsedPage, list[SourceTextBlock]]] = [
+            (
+                page,
+                [
+                    block
+                    for block in page.text_blocks
+                    if block.id not in removed_headers
+                ],
+            )
             for page in pages
-            for block in page.text_blocks
-            if block.id not in removed_headers
-            and not (options.remove_page_numbers and is_page_number(block, page))
+        ]
+        note_body_blocks = [block for _, page_blocks in header_pages for block in page_blocks]
+        note_body_size = HeadingDetector(note_body_blocks).body_size
+        content_pages: list[
+            tuple[ParsedPage, list[SourceTextBlock], list[Footnote]]
+        ] = []
+        for page, header_blocks in header_pages:
+            if options.preserve_footnotes:
+                page_blocks, footnotes = extract_footnotes(
+                    page, header_blocks, note_body_size
+                )
+            else:
+                page_blocks, footnotes = header_blocks, []
+            page_blocks = [
+                block
+                for block in page_blocks
+                if not (options.remove_page_numbers and is_page_number(block, page))
+            ]
+            if page_blocks or footnotes:
+                content_pages.append((page, page_blocks, footnotes))
+            else:
+                report.pages_skipped += 1
+        active_blocks = [
+            block for _, page_blocks, _ in content_pages for block in page_blocks
         ]
         if options.remove_page_numbers:
             report.page_numbers_removed = sum(
-                1 for page in pages for block in page.text_blocks if is_page_number(block, page)
+                1
+                for page, page_blocks in header_pages
+                for block in page_blocks
+                if is_page_number(block, page)
             )
         heading_detector = HeadingDetector(active_blocks)
         elements: list[ContentElement] = []
-        for page in pages:
-            page_blocks = [
-                block
-                for block in page.text_blocks
-                if block.id not in removed_headers
-                and not (options.remove_page_numbers and is_page_number(block, page))
-            ]
+        for page, page_blocks, footnotes in content_pages:
             if options.detect_columns:
                 order_page = ParsedPage(
                     number=page.number,
@@ -90,9 +117,11 @@ class HeuristicLayoutAnalyzer:
                 page, ordered, heading_detector, options, report
             )
             elements.extend(self._insert_images(page_elements, page, options))
+            elements.extend(footnotes)
+            report.footnotes_detected += len(footnotes)
 
         elements, merged_paragraphs = merge_page_continuations(
-            elements, {page.number: page.width for page in pages}
+            elements, {page.number: page.width for page, _, _ in content_pages}
         )
         report.paragraphs_detected = max(0, report.paragraphs_detected - merged_paragraphs)
         elements = [
@@ -127,13 +156,9 @@ class HeuristicLayoutAnalyzer:
         index = 0
         while index < len(blocks):
             block = blocks[index]
-            footnote = (
-                as_footnote(block, page, detector.body_size) if options.preserve_footnotes else None
-            )
-            if footnote is not None:
+            if is_dialogue_start(block.text):
                 flush_paragraphs()
-                result.append(footnote)
-                report.footnotes_detected += 1
+                pending.append(block)
                 index += 1
                 continue
 

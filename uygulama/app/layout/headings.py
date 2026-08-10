@@ -20,8 +20,17 @@ class HeadingDetector:
         self, blocks: list[SourceTextBlock], config: HeadingDetectionConfig | None = None
     ) -> None:
         self._config = config or HeadingDetectionConfig()
+        self._blocks_by_page: dict[int, list[SourceTextBlock]] = {}
+        for block in blocks:
+            self._blocks_by_page.setdefault(block.page_number, []).append(block)
         sizes = [round(block.font_size * 2) / 2 for block in blocks if block.font_size > 0]
-        self.body_size = Counter(sizes).most_common(1)[0][0] if sizes else 10.0
+        counts = Counter(sizes)
+        maximum_count = max(counts.values(), default=0)
+        self.body_size = (
+            min(size for size, count in counts.items() if count == maximum_count)
+            if maximum_count
+            else 10.0
+        )
         self._heading_sizes = sorted(
             {size for size in sizes if size >= self.body_size * self._config.minimum_relative_size},
             reverse=True,
@@ -33,16 +42,45 @@ class HeadingDetector:
         if (
             not text
             or len(text) > self._config.maximum_length
-            or text.endswith((".", ";", ",", "-", "\u00ad"))
         ):
             return False
         numbered = bool(_NUMBERED.match(text))
         upper_case = len(text) > 3 and text.isupper()
         size_signal = block.font_size >= self.body_size * self._config.minimum_relative_size
-        score = int(size_signal) * 2 + int(block.bold) + int(numbered) * 2 + int(upper_case)
-        if block.font_size >= self.body_size * 1.45:
-            score += 1
-        return score >= 2 and (size_signal or numbered or (block.bold and upper_case))
+        medium_size = block.font_size >= self.body_size * 1.25
+        strong_size = block.font_size >= self.body_size * 1.3
+        isolated = self._is_isolated(block)
+        if numbered:
+            return size_signal and (block.bold or strong_size or upper_case or isolated)
+        if upper_case:
+            return medium_size and (block.bold or strong_size or isolated)
+        if block.bold:
+            return medium_size and (strong_size or isolated)
+        if not (strong_size or (medium_size and isolated)):
+            return False
+        return not text.endswith((".", ";", ",", "-", "\u00ad")) or strong_size
+
+    def _is_isolated(self, block: SourceTextBlock) -> bool:
+        page_blocks = sorted(
+            self._blocks_by_page.get(block.page_number, []),
+            key=lambda candidate: candidate.bbox.y0,
+        )
+        index = next(
+            (index for index, candidate in enumerate(page_blocks) if candidate.id == block.id),
+            None,
+        )
+        if index is None:
+            return False
+        minimum_gap = max(block.font_size, self.body_size) * 0.6
+        previous_gap = (
+            block.bbox.y0 - page_blocks[index - 1].bbox.y1 if index > 0 else minimum_gap
+        )
+        next_gap = (
+            page_blocks[index + 1].bbox.y0 - block.bbox.y1
+            if index + 1 < len(page_blocks)
+            else minimum_gap
+        )
+        return previous_gap >= minimum_gap and next_gap >= minimum_gap
 
     def level(self, block: SourceTextBlock) -> int:
         """Map large styles to h1-h4 in descending document-relative order."""

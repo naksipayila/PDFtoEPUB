@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.core.config import ConversionOptions
-from app.core.errors import ConversionCancelled
+from app.core.errors import ConversionCancelled, ConversionError
 from app.core.models import (
     ConversionReport,
     DocumentMetadata,
@@ -73,7 +73,7 @@ class ConversionPipeline:
                 pages.append(parsed)
                 if parsed.ocr_used:
                     report.ocr_pages += 1
-                if page_number == 1 and options.extract_cover and self._looks_like_cover(parsed):
+                if page_number == 1 and options.extract_cover and self._looks_like_cover(page, parsed):
                     import pymupdf as fitz
 
                     cover = image_extractor.store_bytes(
@@ -105,6 +105,8 @@ class ConversionPipeline:
                 assets[cover_asset_id] = all_assets[cover_asset_id]
             analyzer = HeuristicLayoutAnalyzer(metadata, assets)
             document = analyzer.analyze(pages, options, report)
+            if not any(chapter.elements for chapter in document.chapters):
+                raise ConversionError("PDF içinde metin içeren bir sayfa bulunamadı.")
             document.cover_asset_id = cover_asset_id
             report.pages_processed = len(pages)
             report.images_extracted = len(document.assets)
@@ -112,8 +114,15 @@ class ConversionPipeline:
             return document, report
 
     @staticmethod
-    def _looks_like_cover(page: ParsedPage) -> bool:
-        return len(page.text_blocks) <= 4 and bool(page.images)
+    def _looks_like_cover(page: object, parsed: ParsedPage) -> bool:
+        has_images = bool(parsed.images)
+        get_images = getattr(page, "get_images", None)
+        if not has_images and callable(get_images):
+            try:
+                has_images = bool(get_images(full=True))
+            except (AttributeError, RuntimeError):
+                has_images = False
+        return len(parsed.text_blocks) <= 4 and has_images
 
     @staticmethod
     def _write_debug_page(page: ParsedPage, debug_dir: Path) -> None:

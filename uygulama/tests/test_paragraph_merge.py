@@ -1,5 +1,12 @@
+import pytest
+
 from app.core.models import BoundingBox, Paragraph
-from app.layout.paragraphs import ParagraphBuilder, merge_page_continuations
+from app.layout.paragraphs import (
+    ParagraphBuilder,
+    is_dialogue_start,
+    list_item,
+    merge_page_continuations,
+)
 from tests.conftest import source_block
 
 
@@ -52,4 +59,53 @@ def test_keeps_sentence_ended_page_paragraphs_separate() -> None:
     assert [element.text for element in merged] == [
         "İlk paragraf bitti.",
         "Yeni paragraf başladı.",
+    ]
+
+
+@pytest.mark.parametrize("marker", ["-", "–", "—"])
+def test_dialogue_lines_stay_as_separate_paragraphs(marker: str) -> None:
+    paragraphs = ParagraphBuilder().build(
+        [
+            source_block(f"{marker} Birinci konuşma.", y0=100, y1=112),
+            source_block(f"{marker} İkinci konuşma.", y0=114, y1=126),
+        ]
+    )
+
+    assert [paragraph.text for paragraph in paragraphs] == [
+        f"{marker} Birinci konuşma.",
+        f"{marker} İkinci konuşma.",
+    ]
+    assert all(is_dialogue_start(paragraph.text) for paragraph in paragraphs)
+
+
+def test_dialogue_marker_is_not_treated_as_a_list_item() -> None:
+    block = source_block("– Liste gibi görünen konuşma", y0=100, y1=112)
+
+    assert list_item(block) is None
+
+
+def test_unmarked_dialogue_wrap_stays_in_the_same_paragraph() -> None:
+    paragraphs = ParagraphBuilder().build(
+        [
+            source_block("— Uzun konuşmanın ilk satırı", y0=100, y1=112),
+            source_block("devam eden ikinci satırı.", y0=114, y1=126),
+        ]
+    )
+
+    assert [paragraph.text for paragraph in paragraphs] == [
+        "— Uzun konuşmanın ilk satırı devam eden ikinci satırı."
+    ]
+
+
+def test_paragraphs_with_a_normal_visual_gap_stay_separate() -> None:
+    paragraphs = ParagraphBuilder().build(
+        [
+            source_block("Birinci paragraf.", y0=100, y1=112),
+            source_block("İkinci paragraf.", y0=128, y1=140),
+        ]
+    )
+
+    assert [paragraph.text for paragraph in paragraphs] == [
+        "Birinci paragraf.",
+        "İkinci paragraf.",
     ]

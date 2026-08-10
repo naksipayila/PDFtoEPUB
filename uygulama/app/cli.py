@@ -32,7 +32,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="keep the PDF text layer instead of using OCR",
     )
-    parser.add_argument("--no-images", action="store_true", help="do not extract images")
+    image_group = parser.add_mutually_exclusive_group()
+    image_group.add_argument(
+        "--include-images", action="store_true", help="include images on text pages"
+    )
+    image_group.add_argument(
+        "--no-images", action="store_true", help="do not extract inline images (default)"
+    )
     parser.add_argument("--keep-page-numbers", action="store_true", help="keep edge page numbers")
     parser.add_argument(
         "--keep-header-footer", action="store_true", help="keep repeated headers and footers"
@@ -65,7 +71,7 @@ def main(arguments: list[str] | None = None) -> int:
     options = ConversionOptions(
         use_ocr=args.ocr,
         ocr_language="tur",
-        include_images=not args.no_images,
+        include_images=args.include_images and not args.no_images,
         remove_page_numbers=not args.keep_page_numbers,
         remove_headers_footers=not args.keep_header_footer,
         detect_tables=not args.no_table_detection,

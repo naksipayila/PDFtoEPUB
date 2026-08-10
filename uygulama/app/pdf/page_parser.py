@@ -45,9 +45,15 @@ class PageParser:
         if use_ocr and (not blocks or is_scanned_page):
             if not ocr_available:
                 if is_scanned_page:
-                    raise ConversionError(
-                        f"Sayfa {page_number} taranmış ancak Türkçe OCR kullanılamıyor. "
-                        "Tesseract ve tur.traineddata kurulumunu kontrol edin."
+                    if include_images:
+                        raise ConversionError(
+                            f"Sayfa {page_number} taranmış ancak Türkçe OCR kullanılamıyor. "
+                            "Tesseract ve tur.traineddata kurulumunu kontrol edin."
+                        )
+                    blocks = []
+                    LOGGER.warning(
+                        "OCR is unavailable for scanned page %s; skipping the textless page",
+                        page_number,
                     )
                 LOGGER.warning("Page %s has no usable OCR language data", page_number)
             else:
@@ -55,13 +61,17 @@ class PageParser:
                     ocr_blocks = self._ocr_engine.extract_page(page, page_number, ocr_language)
                 except (OSError, RuntimeError) as error:
                     if is_scanned_page:
-                        _fallback_to_page_image(
-                            images, rectangle.width, rectangle.height, page_number
-                        )
+                        if include_images:
+                            _fallback_to_page_image(
+                                images, rectangle.width, rectangle.height, page_number
+                            )
                         blocks = []
                         LOGGER.warning(
-                            "OCR failed on page %s; retaining the page image: %s",
+                            "OCR failed on page %s; %s: %s",
                             page_number,
+                            "retaining the page image"
+                            if include_images
+                            else "skipping the textless page",
                             error,
                         )
                     else:
@@ -71,13 +81,17 @@ class PageParser:
                         blocks = ocr_blocks
                         ocr_used = True
                     elif is_scanned_page:
-                        _fallback_to_page_image(
-                            images, rectangle.width, rectangle.height, page_number
-                        )
+                        if include_images:
+                            _fallback_to_page_image(
+                                images, rectangle.width, rectangle.height, page_number
+                            )
                         blocks = []
                         LOGGER.warning(
-                            "OCR produced no text on page %s; retaining the page image",
+                            "OCR produced no text on page %s; %s",
                             page_number,
+                            "retaining the page image"
+                            if include_images
+                            else "skipping the textless page",
                         )
 
         if blocks:
@@ -111,17 +125,26 @@ class PageParser:
                 bbox = BoundingBox(*line["bbox"])
                 primary_span = max(spans, key=_span_length)
                 font_name = str(primary_span.get("font", "Unknown"))
-                flags = int(primary_span.get("flags", 0))
+                total_length = sum(_span_length(span) for span in spans)
+                bold_length = sum(
+                    _span_length(span) for span in spans if _span_is_bold(span)
+                )
+                italic_length = sum(
+                    _span_length(span) for span in spans if _span_is_italic(span)
+                )
+                font_size = sum(
+                    float(span.get("size", 10.0)) * _span_length(span) for span in spans
+                ) / max(1, total_length)
                 result.append(
                     SourceTextBlock(
                         id=f"p{page_number}-b{block_index}-l{line_index}",
                         text=text,
                         bbox=bbox,
                         page_number=page_number,
-                        font_size=float(primary_span.get("size", 10.0)),
+                        font_size=font_size,
                         font_name=font_name,
-                        bold="bold" in font_name.lower() or bool(flags & 16),
-                        italic="italic" in font_name.lower() or bool(flags & 2),
+                        bold=bold_length / max(1, total_length) >= 0.6,
+                        italic=italic_length / max(1, total_length) >= 0.6,
                         color=int(primary_span.get("color", 0)),
                         block_index=block_index,
                         line_index=line_index,
@@ -132,6 +155,16 @@ class PageParser:
 
 def _span_length(span: dict) -> int:
     return len(span.get("text", "")) or len(span.get("chars", []))
+
+
+def _span_is_bold(span: dict) -> bool:
+    font_name = str(span.get("font", "")).lower()
+    return bool(int(span.get("flags", 0)) & 16) or "bold" in font_name
+
+
+def _span_is_italic(span: dict) -> bool:
+    font_name = str(span.get("font", "")).lower()
+    return bool(int(span.get("flags", 0)) & 2) or "italic" in font_name
 
 
 def _is_page_background(image: PositionedImage, page_width: float, page_height: float) -> bool:

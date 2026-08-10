@@ -148,6 +148,7 @@ class Footnote:
     text: str
     bbox: BoundingBox | None = None
     page_number: int | None = None
+    label: str = ""
 
 
 ContentElement: TypeAlias = Paragraph | Heading | ImageBlock | ListBlock | TableBlock | Footnote
@@ -174,6 +175,7 @@ class SemanticDocument:
 @dataclass(slots=True)
 class ConversionReport:
     pages_processed: int = 0
+    pages_skipped: int = 0
     chapters_detected: int = 0
     paragraphs_detected: int = 0
     headings_detected: int = 0
@@ -188,6 +190,7 @@ class ConversionReport:
     def summary(self) -> str:
         return (
             f"İşlenen sayfa: {self.pages_processed}\n"
+            f"Atlanan metinsiz sayfa: {self.pages_skipped}\n"
             f"Algılanan bölüm: {self.chapters_detected}\n"
             f"Algılanan paragraf: {self.paragraphs_detected}\n"
             f"Algılanan başlık: {self.headings_detected}\n"

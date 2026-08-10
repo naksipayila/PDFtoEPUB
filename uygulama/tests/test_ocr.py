@@ -96,6 +96,17 @@ def test_scanned_page_detection_does_not_require_image_extraction(monkeypatch) -
     assert ocr.pages == [1]
 
 
+def test_scanned_page_is_skipped_when_images_are_disabled(monkeypatch) -> None:
+    native = source_block("Bozuk gizli metin", page=1, identifier="native")
+    parser = PageParser(BackgroundImageExtractor(), UnavailableOcrEngine())
+    monkeypatch.setattr(PageParser, "_extract_text", staticmethod(lambda page, number: [native]))
+
+    parsed = parser.parse(FakePage(has_background=True), 1, True, "tur", include_images=False)
+
+    assert parsed.text_blocks == []
+    assert parsed.images == []
+
+
 def test_scanned_page_fails_instead_of_preserving_unreliable_text(monkeypatch) -> None:
     native = source_block("Bozuk gizli metin", page=1, identifier="native")
     parser = PageParser(StubImageExtractor(), UnavailableOcrEngine())

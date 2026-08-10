@@ -243,7 +243,12 @@ class MainWindow(QMainWindow):
         self._worker.start()
 
     def _options(self) -> ConversionOptions:
-        return ConversionOptions(ocr_language="tur", css_style_mode="reader")
+        return ConversionOptions(
+            ocr_language="tur",
+            include_images=False,
+            extract_cover=True,
+            css_style_mode="reader",
+        )
 
     def _cancel_conversion(self) -> None:
         if self._worker is not None:

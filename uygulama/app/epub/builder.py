@@ -59,8 +59,18 @@ class EpubBuilder:
                 stylesheet(options.css_style_mode), encoding="utf-8"
             )
 
-            image_paths = self._write_images(document.assets, images_dir, options.optimize_images)
-            chapter_paths = self._write_chapters(document.chapters, chapters_dir, image_paths)
+            assets = document.assets
+            if not options.include_images:
+                assets = {
+                    asset_id: asset
+                    for asset_id, asset in document.assets.items()
+                    if asset_id == document.cover_asset_id
+                }
+            image_paths = self._write_images(assets, images_dir, options.optimize_images)
+            chapter_image_paths = image_paths if options.include_images else {}
+            chapter_paths = self._write_chapters(
+                document.chapters, chapters_dir, chapter_image_paths
+            )
             (epub_root / "nav.xhtml").write_text(
                 self._nav_xhtml(document, chapter_paths), encoding="utf-8"
             )
@@ -275,5 +285,13 @@ def _render_element(
         return f"<table>{''.join(rows)}</table>"
     if isinstance(element, Footnote):
         identifier = html.escape(element.identifier)
-        return f'<aside id="{identifier}" epub:type="footnote"><p>{html.escape(element.text)}</p></aside>'
+        label = (
+            f'<span class="footnote-label">{html.escape(element.label)}</span> '
+            if element.label
+            else ""
+        )
+        return (
+            f'<aside id="{identifier}" epub:type="footnote"><p>{label}'
+            f"{html.escape(element.text)}</p></aside>"
+        )
     return ""
