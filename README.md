@@ -17,6 +17,7 @@ Dönüşüm işlemi kurulum tamamlandıktan sonra yerel çalışır. Windows ba�
 - PDF metnini koordinatlarını koruyarak ayıklar ve anlamsal belge modeline dönüştürür.
 - Başlık, bölüm, paragraf, liste, temel pipe-ayraçlı tablo, resim açıklaması ve dipnot algılamayı dener.
 - Çok sütunlu sayfalarda okuma sırasını düzenler.
+- Basılı "İçindekiler" sayfalarındaki tek/çok sütunlu kayıtları, noktalı liderleri, ayrı sayfa etiketlerini ve satıra sarılmış başlıkları yeniden akışlı EPUB satırlarına dönüştürür.
 - Tekrarlanan üstbilgi/altbilgileri ve sayfa kenarındaki sayfa numaralarını varsayılan olarak kaldırır.
 - Güvenilir seçilebilir PDF metnini korur; yalnız metin yoksa, görünmezse veya bozuk Unicode içeriyorsa yerel Tesseract OCR kullanır.
 - OCR yön/eğiklik düzeltmesi, iki sayfa segmentasyon adayı, zaman aşımı ve güven/kapsam karşılaştırması uygular. Varsayılan OCR dili `tur` dilidir.

@@ -163,6 +163,20 @@ class TableBlock:
     page_number: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class PrintedTocEntry:
+    title: str
+    page_label: str
+    level: int = 0
+
+
+@dataclass(slots=True)
+class PrintedTocBlock:
+    entries: list[PrintedTocEntry]
+    bbox: BoundingBox | None = None
+    page_number: int | None = None
+
+
 @dataclass(slots=True)
 class Footnote:
     identifier: str
@@ -172,7 +186,9 @@ class Footnote:
     label: str = ""
 
 
-ContentElement: TypeAlias = Paragraph | Heading | ImageBlock | ListBlock | TableBlock | Footnote
+ContentElement: TypeAlias = (
+    Paragraph | Heading | ImageBlock | ListBlock | TableBlock | PrintedTocBlock | Footnote
+)
 
 
 @dataclass(slots=True)
@@ -211,6 +227,7 @@ class ConversionReport:
     image_fallback_pages: int = 0
     issues: list[ConversionIssue] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    toc_entries_detected: int = 0
 
     def add_issue(self, issue: ConversionIssue) -> None:
         """Record structured quality information while preserving warning compatibility."""
@@ -227,6 +244,7 @@ class ConversionReport:
             f"Algılanan başlık: {self.headings_detected}\n"
             f"Ayıklanan görsel: {self.images_extracted}\n"
             f"Algılanan tablo: {self.tables_detected}\n"
+            f"Düzenlenen içindekiler kaydı: {self.toc_entries_detected}\n"
             f"Algılanan dipnot: {self.footnotes_detected}\n"
             f"Kaldırılan üst/alt bilgi: {self.headers_removed}\n"
             f"Kaldırılan sayfa numarası: {self.page_numbers_removed}\n"

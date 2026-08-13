@@ -53,6 +53,11 @@ class ReadingOrderResolver:
                 [block for block in column_blocks if block.bbox.y0 >= cursor], page.width
             )
         )
+        if len(ordered) != len(blocks) or {block.id for block in ordered} != {
+            block.id for block in blocks
+        }:
+            # Mixed-layout band boundaries must never discard source text.
+            return self._sort_columns(blocks, page.width)
         return ordered
 
     def detect_columns(

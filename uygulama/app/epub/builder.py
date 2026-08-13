@@ -23,6 +23,7 @@ from app.core.models import (
     ImageBlock,
     ListBlock,
     Paragraph,
+    PrintedTocBlock,
     SemanticDocument,
     TableBlock,
 )
@@ -301,6 +302,20 @@ def _render_element(
                 f"<tr>{''.join(f'<{cell}>{html.escape(value)}</{cell}>' for value in row)}</tr>"
             )
         return f"<table{source_page}>{''.join(rows)}</table>"
+    if isinstance(element, PrintedTocBlock):
+        entries = "".join(
+            (
+                f'<li class="printed-toc-entry printed-toc-level-{entry.level}">'
+                f'<span class="printed-toc-title">{html.escape(entry.title)}</span>'
+                '<span class="printed-toc-leader" aria-hidden="true">&#160;</span>'
+                f'<span class="printed-toc-page">&#160;{html.escape(entry.page_label)}</span></li>'
+            )
+            for entry in element.entries
+        )
+        return (
+            f'<section class="printed-toc" aria-label="Contents"{source_page}>'
+            f'<ol>{entries}</ol></section>'
+        )
     if isinstance(element, Footnote):
         identifier = html.escape(element.identifier)
         label = (

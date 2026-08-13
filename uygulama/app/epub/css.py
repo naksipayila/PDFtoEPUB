@@ -18,6 +18,15 @@ aside { font-size: 0.9em; margin: 0.7em 0; }
 .footnote-label { font-weight: 700; }
 table { border-collapse: collapse; margin: 1em auto; max-width: 100%; }
 th, td { border: 1px solid #888; padding: 0.35em; vertical-align: top; }
+.printed-toc { margin: 0.8em 0 1.2em; }
+.printed-toc ol { list-style: none; margin: 0; padding: 0; }
+.printed-toc-entry { align-items: baseline; break-inside: avoid; display: flex; gap: 0.35em; margin: 0 0 0.45em; page-break-inside: avoid; }
+.printed-toc-title { min-width: 0; }
+.printed-toc-leader { border-bottom: 1px dotted currentColor; flex: 1 1 1.5em; min-width: 1.5em; }
+.printed-toc-page { flex: none; font-variant-numeric: tabular-nums; text-align: right; }
+.printed-toc-level-1 { padding-left: 1em; padding-inline-start: 1em; }
+.printed-toc-level-2 { padding-left: 2em; padding-inline-start: 2em; }
+.printed-toc-level-3 { padding-left: 3em; padding-inline-start: 3em; }
 """
     if mode == "compact":
         return base.replace("margin: 5%;", "margin: 2%;").replace(
