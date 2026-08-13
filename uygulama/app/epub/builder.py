@@ -65,11 +65,19 @@ class EpubBuilder:
                     asset_id: asset
                     for asset_id, asset in document.assets.items()
                     if asset_id == document.cover_asset_id
+                    or _asset_is_used_by_content(document, asset_id)
                 }
             image_paths = self._write_images(assets, images_dir, options.optimize_images)
-            chapter_image_paths = image_paths if options.include_images else {}
+            chapter_image_paths = {
+                asset_id: image
+                for asset_id, image in image_paths.items()
+                if options.include_images or _asset_is_used_by_content(document, asset_id)
+            }
             chapter_paths = self._write_chapters(
-                document.chapters, chapters_dir, chapter_image_paths
+                document.chapters,
+                chapters_dir,
+                chapter_image_paths,
+                document.metadata.language,
             )
             (epub_root / "nav.xhtml").write_text(
                 self._nav_xhtml(document, chapter_paths), encoding="utf-8"
@@ -126,11 +134,12 @@ class EpubBuilder:
         chapters: list[Chapter],
         destination_dir: Path,
         image_paths: dict[str, tuple[str, str]],
+        language: str,
     ) -> list[str]:
         paths: list[str] = []
         for index, chapter in enumerate(chapters, start=1):
             filename = f"chapter_{index:03d}.xhtml"
-            xhtml = _chapter_xhtml(chapter, index, image_paths)
+            xhtml = _chapter_xhtml(chapter, index, image_paths, language)
             (destination_dir / filename).write_text(xhtml, encoding="utf-8")
             paths.append(f"chapters/{filename}")
         return paths
@@ -169,7 +178,7 @@ class EpubBuilder:
         title = html.escape(document.metadata.title)
         return f"""<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <!DOCTYPE html>
-<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{html.escape(document.metadata.language)}\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{html.escape(document.metadata.language)}\" lang=\"{html.escape(document.metadata.language)}\">
 <head><title>Contents</title><link rel=\"stylesheet\" type=\"text/css\" href=\"styles.css\"/></head>
 <body><nav epub:type=\"toc\" id=\"toc\"><h1>{title}</h1><ol>{"".join(entries)}</ol></nav></body></html>"""
 
@@ -224,7 +233,7 @@ class EpubBuilder:
     <dc:identifier id=\"pub-id\">urn:uuid:{identifier}</dc:identifier>{isbn}
     <dc:title>{html.escape(metadata.title)}</dc:title>
     <dc:creator>{html.escape(metadata.author or "Unknown")}</dc:creator>
-    <dc:language>{html.escape(metadata.language or "en")}</dc:language>{publisher}{description}{subject}
+    <dc:language>{html.escape(metadata.language or "tr")}</dc:language>{publisher}{description}{subject}
     <meta property=\"dcterms:modified\">{modified}</meta>
   </metadata>
   <manifest>{"".join(manifest)}</manifest>
@@ -236,6 +245,7 @@ def _chapter_xhtml(
     chapter: Chapter,
     chapter_index: int,
     image_paths: dict[str, tuple[str, str]],
+    language: str,
 ) -> str:
     body = "".join(
         _render_element(element, chapter_index, index, image_paths)
@@ -243,7 +253,7 @@ def _chapter_xhtml(
     )
     return f"""<?xml version=\"1.0\" encoding=\"utf-8\"?>
 <!DOCTYPE html>
-<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" xmlns:epub=\"http://www.idpf.org/2007/ops\" xml:lang=\"{html.escape(language or "tr")}\" lang=\"{html.escape(language or "tr")}\">
 <head><title>{html.escape(chapter.title)}</title><link rel=\"stylesheet\" type=\"text/css\" href=\"../styles.css\"/></head>
 <body><section epub:type=\"chapter\">{body}</section></body></html>"""
 
@@ -254,11 +264,19 @@ def _render_element(
     element_index: int,
     image_paths: dict[str, tuple[str, str]],
 ) -> str:
+    source_pages = getattr(element, "source_pages", ())
+    page_number = getattr(element, "page_number", None)
+    page_values = source_pages or ((page_number,) if page_number is not None else ())
+    source_page = (
+        f' data-source-page="{page_values[0]}" data-source-pages="{",".join(str(value) for value in page_values)}"'
+        if page_values
+        else ""
+    )
     if isinstance(element, Paragraph):
-        return f"<p>{html.escape(element.text)}</p>"
+        return f"<p{source_page}>{html.escape(element.text)}</p>"
     if isinstance(element, Heading):
         level = min(4, max(1, element.level))
-        return f'<h{level} id="heading-{chapter_index}-{element_index}">{html.escape(element.text)}</h{level}>'
+        return f'<h{level} id="heading-{chapter_index}-{element_index}"{source_page}>{html.escape(element.text)}</h{level}>'
     if isinstance(element, ImageBlock):
         image = image_paths.get(element.asset_id)
         if image is None:
@@ -268,12 +286,12 @@ def _render_element(
             f"<figcaption>{html.escape(element.caption)}</figcaption>" if element.caption else ""
         )
         return (
-            f'<figure><img src="../images/{html.escape(image[0])}" alt="{alt}"/>{caption}</figure>'
+            f'<figure{source_page}><img src="../images/{html.escape(image[0])}" alt="{alt}"/>{caption}</figure>'
         )
     if isinstance(element, ListBlock):
         tag = "ol" if element.ordered else "ul"
         return (
-            f"<{tag}>{''.join(f'<li>{html.escape(item)}</li>' for item in element.items)}</{tag}>"
+            f"<{tag}{source_page}>{''.join(f'<li>{html.escape(item)}</li>' for item in element.items)}</{tag}>"
         )
     if isinstance(element, TableBlock):
         rows = []
@@ -282,7 +300,7 @@ def _render_element(
             rows.append(
                 f"<tr>{''.join(f'<{cell}>{html.escape(value)}</{cell}>' for value in row)}</tr>"
             )
-        return f"<table>{''.join(rows)}</table>"
+        return f"<table{source_page}>{''.join(rows)}</table>"
     if isinstance(element, Footnote):
         identifier = html.escape(element.identifier)
         label = (
@@ -291,7 +309,15 @@ def _render_element(
             else ""
         )
         return (
-            f'<aside id="{identifier}" epub:type="footnote"><p>{label}'
+            f'<aside id="{identifier}" epub:type="footnote"{source_page}><p>{label}'
             f"{html.escape(element.text)}</p></aside>"
         )
     return ""
+
+
+def _asset_is_used_by_content(document: SemanticDocument, asset_id: str) -> bool:
+    return any(
+        isinstance(element, ImageBlock) and element.asset_id == asset_id
+        for chapter in document.chapters
+        for element in chapter.elements
+    )

@@ -95,4 +95,17 @@ class ReadingOrderResolver:
         clusters = self.detect_columns(blocks, page_width)
         if not clusters:
             return self._sort_vertically(blocks)
-        return [block for cluster in clusters for block in self._sort_vertically(cluster)]
+        clustered_ids = {block.id for cluster in clusters for block in cluster}
+        unmatched = [block for block in blocks if block.id not in clustered_ids]
+        if not unmatched:
+            return [block for cluster in clusters for block in self._sort_vertically(cluster)]
+
+        starts = [median(block.bbox.x0 for block in cluster) for cluster in clusters]
+        assigned = [list(cluster) for cluster in clusters]
+        for block in unmatched:
+            index = min(
+                range(len(starts)),
+                key=lambda candidate: abs(block.bbox.x0 - starts[candidate]),
+            )
+            assigned[index].append(block)
+        return [block for cluster in assigned for block in self._sort_vertically(cluster)]

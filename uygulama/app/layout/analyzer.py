@@ -84,7 +84,7 @@ class HeuristicLayoutAnalyzer:
                 for block in page_blocks
                 if not (options.remove_page_numbers and is_page_number(block, page))
             ]
-            if page_blocks or footnotes:
+            if page_blocks or footnotes or _page_fallback_images(page):
                 content_pages.append((page, page_blocks, footnotes))
             else:
                 report.pages_skipped += 1
@@ -109,6 +109,9 @@ class HeuristicLayoutAnalyzer:
                     text_blocks=page_blocks,
                     images=page.images,
                     ocr_used=page.ocr_used,
+                    text_source=page.text_source,
+                    ocr_confidence=page.ocr_confidence,
+                    issues=page.issues,
                 )
                 ordered = self._resolver.resolve(order_page)
             else:
@@ -213,9 +216,14 @@ class HeuristicLayoutAnalyzer:
         page: ParsedPage,
         options: ConversionOptions,
     ) -> list[ContentElement]:
-        if not options.include_images or not page.images:
+        images = [
+            image
+            for image in page.images
+            if options.include_images or image.role == "page-fallback"
+        ]
+        if not images:
             return text_elements
-        images = sorted(page.images, key=lambda image: image.bbox.y0)
+        images = sorted(images, key=lambda image: image.bbox.y0)
         result: list[ContentElement] = []
         image_index = 0
         for element in text_elements:
@@ -261,3 +269,7 @@ def _element_types() -> tuple[type[ContentElement], ...]:
     from app.core.models import Footnote
 
     return (Paragraph, Heading, ImageBlock, ListBlock, TableBlock, Footnote)
+
+
+def _page_fallback_images(page: ParsedPage) -> list:
+    return [image for image in page.images if image.role == "page-fallback"]

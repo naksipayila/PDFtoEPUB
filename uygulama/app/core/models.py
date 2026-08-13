@@ -47,7 +47,7 @@ class DocumentMetadata:
 
     title: str = "Untitled"
     author: str = ""
-    language: str = "en"
+    language: str = "tr"
     publisher: str = ""
     description: str = ""
     isbn: str = ""
@@ -69,6 +69,7 @@ class SourceTextBlock:
     color: int | None = None
     block_index: int = 0
     line_index: int = 0
+    confidence: float | None = None
 
 
 @dataclass(slots=True)
@@ -89,6 +90,22 @@ class PositionedImage:
     asset_id: str
     bbox: BoundingBox
     page_number: int
+    role: str = "inline"
+
+
+@dataclass(frozen=True, slots=True)
+class ConversionIssue:
+    """A structured quality or content-retention event from conversion."""
+
+    code: str
+    message: str
+    severity: str = "warning"
+    stage: str = "conversion"
+    page_number: int | None = None
+
+    def display(self) -> str:
+        page = f"Sayfa {self.page_number}: " if self.page_number is not None else ""
+        return f"{page}{self.message}"
 
 
 @dataclass(slots=True)
@@ -101,6 +118,9 @@ class ParsedPage:
     text_blocks: list[SourceTextBlock] = field(default_factory=list)
     images: list[PositionedImage] = field(default_factory=list)
     ocr_used: bool = False
+    text_source: str = "none"
+    ocr_confidence: float | None = None
+    issues: list[ConversionIssue] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -108,6 +128,7 @@ class Paragraph:
     text: str
     bbox: BoundingBox | None = None
     page_number: int | None = None
+    source_pages: tuple[int, ...] = ()
 
 
 @dataclass(slots=True)
@@ -185,7 +206,17 @@ class ConversionReport:
     headers_removed: int = 0
     page_numbers_removed: int = 0
     ocr_pages: int = 0
+    native_text_pages: int = 0
+    low_confidence_ocr_pages: int = 0
+    image_fallback_pages: int = 0
+    issues: list[ConversionIssue] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+    def add_issue(self, issue: ConversionIssue) -> None:
+        """Record structured quality information while preserving warning compatibility."""
+        self.issues.append(issue)
+        if issue.severity in {"warning", "error"}:
+            self.warnings.append(issue.display())
 
     def summary(self) -> str:
         return (
@@ -199,7 +230,10 @@ class ConversionReport:
             f"Algılanan dipnot: {self.footnotes_detected}\n"
             f"Kaldırılan üst/alt bilgi: {self.headers_removed}\n"
             f"Kaldırılan sayfa numarası: {self.page_numbers_removed}\n"
+            f"Yerel metni kullanılan sayfa: {self.native_text_pages}\n"
             f"OCR uygulanan sayfa: {self.ocr_pages}\n"
+            f"Düşük güvenli OCR sayfası: {self.low_confidence_ocr_pages}\n"
+            f"Görsel olarak korunan sayfa: {self.image_fallback_pages}\n"
             f"Uyarı: {len(self.warnings)}"
         )
 

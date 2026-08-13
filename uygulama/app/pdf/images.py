@@ -70,6 +70,9 @@ class ImageExtractor:
             try:
                 asset = self._extract_asset(page.parent, xref)
                 for rectangle in page.get_image_rects(xref):
+                    rectangle = fitz.Rect(
+                        rectangle.x0, rectangle.y0, rectangle.x1, rectangle.y1
+                    ) * getattr(page, "rotation_matrix", fitz.Identity)
                     bbox = BoundingBox(rectangle.x0, rectangle.y0, rectangle.x1, rectangle.y1)
                     if _is_raster_artifact(asset, bbox):
                         LOGGER.debug("Ignoring raster artifact xref %s on page %s", xref, page_number)

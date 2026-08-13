@@ -14,6 +14,5 @@ def metadata_from_pdf(raw: dict[str, Any] | None) -> DocumentMetadata:
         title=(raw.get("title") or "Untitled").strip() or "Untitled",
         author=(raw.get("author") or "").strip(),
         subject=(raw.get("subject") or "").strip(),
-        publisher=(raw.get("producer") or "").strip(),
         description=(raw.get("keywords") or "").strip(),
     )

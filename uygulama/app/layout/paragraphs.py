@@ -83,7 +83,10 @@ class ParagraphBuilder:
             text = join_line_text(text, line.text)
             bbox = bbox.union(line.bbox)
         return Paragraph(
-            text=normalize_text(text), bbox=bbox, page_number=lines[0].page_number
+            text=normalize_text(text),
+            bbox=bbox,
+            page_number=lines[0].page_number,
+            source_pages=(lines[0].page_number,),
         )
 
 
@@ -104,7 +107,14 @@ def merge_page_continuations(
                     previous.text = join_line_text(previous.text, element.text)
                     if previous.bbox and element.bbox:
                         previous.bbox = previous.bbox.union(element.bbox)
-                    previous.page_number = element.page_number
+                    previous.source_pages = tuple(
+                        dict.fromkeys(
+                            (
+                                *(previous.source_pages or (previous.page_number,)),
+                                *(element.source_pages or (element.page_number,)),
+                            )
+                        )
+                    )
                     merge_count += 1
                     continue
         merged.append(element)
@@ -140,11 +150,14 @@ def _page_continues(
 ) -> bool:
     if previous.page_number is None or current.page_number is None:
         return False
-    if current.page_number != previous.page_number + 1:
+    previous_page_number = (
+        previous.source_pages[-1] if previous.source_pages else previous.page_number
+    )
+    if current.page_number != previous_page_number + 1:
         return False
     if not previous.bbox or not current.bbox:
         return False
-    page_width = page_widths.get(previous.page_number, 600.0)
+    page_width = page_widths.get(previous_page_number, 600.0)
     if abs(previous.bbox.x0 - current.bbox.x0) > max(20.0, page_width * 0.12):
         return False
 

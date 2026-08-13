@@ -18,12 +18,17 @@ Dönüşüm işlemi kurulum tamamlandıktan sonra yerel çalışır. Windows ba�
 - Başlık, bölüm, paragraf, liste, temel pipe-ayraçlı tablo, resim açıklaması ve dipnot algılamayı dener.
 - Çok sütunlu sayfalarda okuma sırasını düzenler.
 - Tekrarlanan üstbilgi/altbilgileri ve sayfa kenarındaki sayfa numaralarını varsayılan olarak kaldırır.
-- Metinsiz veya taranmış sayfalarda yerel Tesseract OCR kullanır. Varsayılan OCR dili `tur` dilidir.
+- Güvenilir seçilebilir PDF metnini korur; yalnız metin yoksa, görünmezse veya bozuk Unicode içeriyorsa yerel Tesseract OCR kullanır.
+- OCR yön/eğiklik düzeltmesi, iki sayfa segmentasyon adayı, zaman aşımı ve güven/kapsam karşılaştırması uygular. Varsayılan OCR dili `tur` dilidir.
+- Düşük güvenli OCR, görsel fallback ve metin kaynağını sayfa bazlı kalite raporunda gösterir.
+- OCR ile kurtarılamayan raster veya vektör sayfaları sessizce atmak yerine tam sayfa görseli olarak korur.
 - İlk sayfayı basit kapak sezgisiyle algılayıp EPUB kapak görseli olarak ekleyebilir.
 - Görselleri SHA-256 ile tekilleştirir ve isteğe bağlı olarak EPUB içine optimize ederek yazar.
-- EPUB arşivini atomik olarak yayımlar ve dahili yapısal doğrulama yapar.
+- EPUB adayını hedefe dokunmadan oluşturur ve doğrular; yalnız geçerliyse hedefi atomik olarak değiştirir.
+- Dahili validator; manifest/spine/nav, dil, XHTML ve fragment hedeflerini kontrol eder. İsteğe bağlı EPUBCheck ve CI Calibre round-trip kalite kapıları bulunur.
 - CLI ve GUI aynı `PdfToEpubConverter` servisini kullanır.
-- GUI dönüşümü ayrı Qt iş parçacığında çalıştırır ve sayfa sınırlarında iptal desteği sunar.
+- GUI dönüşümü ayrı Qt iş parçacığında çalıştırır, sayfa sınırlarında iptal desteği sunar ve pencere kapanırken worker'ın güvenli biçimde bitmesini bekler.
+- GUI, özgün PDF sayfasını ve kaynak sayfaya bağlı EPUB metnini yan yana gösteren düzeltme ekranı sağlar; düşük güvenli OCR sayfalarını otomatik açar.
 
 ## Gereksinimler
 
@@ -41,8 +46,8 @@ Kök dizindeki `PDFtoEPUB.cmd`, uygulamayı `%LOCALAPPDATA%\PDFtoEPUB` altında 
 1. GitHub `main` dalının güncel ZIP arşivini indirir.
 2. Uygulama dosyalarını yerel uygulama dizinine kopyalar.
 3. Kullanılabilir Python bulamazsa Python `3.12.10` paketini indirir.
-4. Bir sanal ortam oluşturup `runtime-requirements.txt` dosyasını kurar.
-5. Tesseract ve `tessdata_best` Türkçe modelini hazırlar.
+4. Python 3.12'den eski bir sanal ortamı yeniler, ardından `runtime-requirements.txt` dosyasını kurar.
+5. Tesseract ile sabit revision'dan `tessdata_best` Türkçe ve yön algılama modellerini hazırlar.
 6. PySide6 GUI'yi başlatır.
 
 Bu akış yalnızca Windows PowerShell içindir. Arşiv sabit bir commit veya checksum ile pinlenmediğinden başlatıcı her çalıştırıldığında GitHub'daki güncel `main` içeriğini alabilir.
@@ -68,7 +73,7 @@ OCR kullanılmayacaksa doğrudan PDF metin katmanıyla da çalışılabilir. Tar
 python run.py
 ```
 
-GUI'ye yerel bir `.pdf` dosyasını bırakınca dönüşüm otomatik başlar. Çıktı sistemin İndirilenler klasörüne, PDF üstverisindeki başlıktan veya dosya adından türetilen `<başlık>-EPUB.epub` adıyla yazılır. GUI'de Türkçe OCR, kapak çıkarımı ve okuyucu CSS'i açıktır; satır içi görseller kapalıdır. GUI'de dosya seçici, çıktı seçici veya parola alanı yoktur.
+GUI'ye yerel bir `.pdf` dosyasını bırakınca dönüşüm otomatik başlar. Çıktı sistemin İndirilenler klasörüne, PDF üstverisindeki başlıktan veya dosya adından türetilen `<başlık>-EPUB.epub` adıyla yazılır. GUI'de Türkçe OCR, kapak çıkarımı ve okuyucu CSS'i açıktır; satır içi görseller kapalıdır. Dönüşümden sonra `Metni Gözden Geçir` ile kaynak PDF sayfası ve EPUB metni yan yana açılır. Düşük güvenli OCR varsa bu ekran otomatik olarak ilgili sayfada açılır. Kaydedilen düzeltme yeniden doğrulanır ve atomik yayımlanır.
 
 GUI smoke kontrolü için:
 
@@ -96,6 +101,8 @@ Yukarıdaki iki komut `uygulama` dizininde çalıştırılmalıdır. Başlıca s
 | --- | --- | --- |
 | `-o`, `--output PATH` | Girdi adı + `.epub` | Çıktı yolunu belirler; uzantı `.epub` yapılır. |
 | `--ocr` / `--no-ocr` | OCR açık | Taranmış veya metinsiz sayfalarda yerel OCR kullanır. |
+| `--ocr-language CODE` | `tur` | Tesseract dilini veya `tur+eng` gibi birleşimi belirler. |
+| `--language TAG` | `tr` | EPUB için geçerli BCP 47 yayın dili belirler. |
 | `--include-images` / `--no-images` | Görsel kapalı | Metin sayfalarındaki görselleri EPUB'a ekler. |
 | `--keep-page-numbers` | Sayılar kaldırılır | Kenar sayfa numaralarını korur. |
 | `--keep-header-footer` | Üst/alt bilgiler kaldırılır | Tekrarlanan kenar metinlerini korur. |
@@ -105,6 +112,7 @@ Yukarıdaki iki komut `uygulama` dizininde çalıştırılmalıdır. Başlıca s
 | `--password PASSWORD` | Parola yok | Şifreli PDF için kullanıcı parolasını verir. |
 | `--title`, `--author`, `--publisher`, `--subject` | PDF üstverisi | EPUB üstverisini komut satırından geçersiz kılar. |
 | `--debug-dir DIRECTORY` | JSON yok | Sayfa bloklarını hata ayıklama JSON'u olarak yazar. |
+| `--epubcheck` | Kapalı | Kurulu EPUBCheck ile ek doğrulama yapar; araç yoksa açık hata verir. |
 | `--verbose` | Normal log | Konsol log seviyesini ayrıntılı yapar. |
 
 CLI varsayılan olarak çıktı dizinine `pdf_to_epub.log` yazar. Var olan çıktı dosyası onay sorulmadan değiştirilebilir.
@@ -118,15 +126,15 @@ python -m pytest
 ruff check app tests
 ```
 
-Testler ikili PDF fixture'ları yerine geçici ve sentetik PDF'ler üretir. Ruff ayarları `pyproject.toml` içindedir. Projede ayrı bir formatlama komutu, CI yapılandırması veya doğrulanmış paketleme/release komutu yoktur.
+Testler ikili PDF fixture'ları yerine geçici ve sentetik PDF'ler üretir. Ruff ayarları `pyproject.toml` içindedir. GitHub Actions; Windows/Linux pytest ve Ruff, GUI smoke, checksum ile sabitlenmiş EPUBCheck 5.3.0, Calibre reader round-trip ve Python 3.12 clean-wheel kurulumunu doğrular.
 
 ## Günlükler ve Hata Ayıklama
 
 - CLI logu: çıktı dosyasının bulunduğu dizin, `pdf_to_epub.log`
 - GUI logu: `%USERPROFILE%\.pdf_to_epub\pdf_to_epub.log`
-- Ham sayfa blokları: CLI `--debug-dir` seçeneğiyle verilen dizinde `page_001.json` biçiminde
-- EPUB doğrulaması: ZIP yapısı, `mimetype`, `container.xml`, OPF manifest/spine, XHTML ve yerel referanslar dahili olarak kontrol edilir.
-- Harici `epubcheck` normal dönüşümde çalıştırılmaz.
+- Ham sayfa blokları: CLI `--debug-dir` seçeneğiyle verilen dizinde `page_001.json` biçiminde; metin kaynağı, OCR güveni ve kalite sorunları da kaydedilir.
+- EPUB doğrulaması: ZIP yapısı, `mimetype`, `container.xml`, metadata/dil, tekil OPF manifest/spine/nav, XHTML ve yerel/fragment referansları dahili olarak kontrol edilir.
+- Harici EPUBCheck normal dönüşümde çalıştırılmaz; `--epubcheck` ile zorunlu tutulabilir ve CI'da sabit sürümle çalışır.
 
 ## Proje Yapısı
 
@@ -160,8 +168,8 @@ Testler ikili PDF fixture'ları yerine geçici ve sentetik PDF'ler üretir. Ruff
 - Tablo algılama yalnızca temel pipe-ayraçlı metin tablolarını tanır; geometrik tablolar genel olarak yeniden kurulmaz.
 - PDF bağlantıları, vektör çizimleri, açıklamalar, formlar ve benzeri yapılar korunmaz.
 - Dipnotlar EPUB `aside` öğeleri olarak yazılır; kaynak metin içi dipnot işaretiyle otomatik bağlantı kurulmaz.
-- OCR dili CLI ve GUI'de `tur` olarak sabittir; başka diller için uygun Tesseract verisi ve manuel seçenek desteği gerekir.
-- Yalnızca görsel içeren belgeler, anlamsal metin öğesi bulunmadığında dönüştürme hatası verebilir.
+- GUI OCR dili `tur` olarak sabittir; CLI `--ocr-language` ile kurulu modelleri seçebilir.
+- Yalnızca görsel/vektör içeren sayfalar yeniden akışlı metin yerine sayfa görseli olarak korunabilir.
 - GUI şifreli PDF'ler için parola alamaz; CLI `--password` seçeneğini destekler.
 - GUI'de satır içi görseller kapalıdır; CLI'de `--include-images` ile açılabilir.
 
@@ -179,4 +187,4 @@ Testler ikili PDF fixture'ları yerine geçici ve sentetik PDF'ler üretir. Ruff
 - Girdi PDF'si uygulama tarafından okunur; kaynak dosya değiştirilmez.
 - Şifreler yalnızca komut satırı argümanı olarak alınır; dokümantasyona veya loglara eklenmemelidir.
 - `.env` ve benzeri gizli dosyalar commit edilmez.
-- Çıktı yolu mevcut bir EPUB'ı değiştirebilir; dönüşümden önce önemli çıktıların yedeği alınmalıdır.
+- Çıktı yolu mevcut bir EPUB'ı yalnız yeni aday doğrulamadan geçtikten sonra atomik olarak değiştirir.

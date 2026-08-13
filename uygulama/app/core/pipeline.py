@@ -46,10 +46,18 @@ class ConversionPipeline:
         image_extractor = ImageExtractor(images_dir)
         with PdfReader(input_path, options.pdf_password) as reader:
             metadata = _merged_metadata(reader.metadata, options.metadata)
+            if not metadata.title or metadata.title.casefold() == "untitled":
+                metadata.title = input_path.stem
             self._emit(
                 progress, "analysis", f"{reader.page_count} sayfa algılandı.", 0, reader.page_count
             )
-            parser = PageParser(image_extractor, OcrEngine())
+            parser = PageParser(
+                image_extractor,
+                OcrEngine(
+                    timeout_seconds=options.ocr_timeout_seconds,
+                    is_cancelled=is_cancelled,
+                ),
+            )
             pages: list[ParsedPage] = []
             cover_asset_id: str | None = None
             for page_index in range(reader.page_count):
@@ -69,10 +77,23 @@ class ConversionPipeline:
                     options.use_ocr,
                     options.ocr_language,
                     options.include_images,
+                    options.preserve_unreadable_pages,
+                    options.minimum_ocr_confidence,
                 )
                 pages.append(parsed)
                 if parsed.ocr_used:
                     report.ocr_pages += 1
+                    if (
+                        parsed.ocr_confidence is not None
+                        and parsed.ocr_confidence < options.minimum_ocr_confidence
+                    ):
+                        report.low_confidence_ocr_pages += 1
+                elif parsed.text_source == "native":
+                    report.native_text_pages += 1
+                if parsed.text_source == "image":
+                    report.image_fallback_pages += 1
+                for issue in parsed.issues:
+                    report.add_issue(issue)
                 if page_number == 1 and options.extract_cover and self._looks_like_cover(page, parsed):
                     import pymupdf as fitz
 
@@ -131,6 +152,17 @@ class ConversionPipeline:
             "page": page.number,
             "width": page.width,
             "height": page.height,
+            "text_source": page.text_source,
+            "ocr_confidence": page.ocr_confidence,
+            "issues": [
+                {
+                    "code": issue.code,
+                    "severity": issue.severity,
+                    "stage": issue.stage,
+                    "message": issue.message,
+                }
+                for issue in page.issues
+            ],
             "blocks": [
                 {
                     "type": "text",
@@ -140,6 +172,7 @@ class ConversionPipeline:
                     "font_name": block.font_name,
                     "bold": block.bold,
                     "italic": block.italic,
+                    "confidence": block.confidence,
                 }
                 for block in page.text_blocks
             ],

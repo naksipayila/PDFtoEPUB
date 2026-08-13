@@ -5,8 +5,9 @@ $venvRoot = Join-Path $projectRoot ".venv"
 $venvPython = Join-Path $venvRoot "Scripts\python.exe"
 $pythonw = Join-Path $venvRoot "Scripts\pythonw.exe"
 $localTessdata = Join-Path $projectRoot ".runtime\tesseract\tessdata\tur.traineddata"
+$localOsdData = Join-Path $projectRoot ".runtime\tesseract\tessdata\osd.traineddata"
 $localTessdataMarker = Join-Path $projectRoot ".runtime\tesseract\tessdata\tur.model"
-$requiredTessdataVersion = "tessdata_best"
+$requiredTessdataVersion = "tessdata_best-e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
 
 function Find-Tesseract {
     $candidates = @(
@@ -23,8 +24,20 @@ function Find-Tesseract {
     return $null
 }
 
+function Test-SupportedPython {
+    try {
+        & $venvPython -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)" 2>$null
+    } catch {
+        return $false
+    }
+    return $LASTEXITCODE -eq 0
+}
+
 function Test-Ready {
     if (-not (Test-Path -LiteralPath $venvPython) -or -not (Test-Path -LiteralPath $pythonw)) {
+        return $false
+    }
+    if (-not (Test-SupportedPython)) {
         return $false
     }
 
@@ -37,7 +50,7 @@ function Test-Ready {
         return $false
     }
 
-    if (-not (Find-Tesseract) -or -not (Test-Path -LiteralPath $localTessdata)) {
+    if (-not (Find-Tesseract) -or -not (Test-Path -LiteralPath $localTessdata) -or -not (Test-Path -LiteralPath $localOsdData)) {
         return $false
     }
     if (-not (Test-Path -LiteralPath $localTessdataMarker)) {

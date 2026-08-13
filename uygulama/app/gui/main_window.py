@@ -34,12 +34,16 @@ from PySide6.QtWidgets import (
 
 from app.core.config import ConversionOptions
 from app.core.errors import ConversionError
-from app.core.models import ProgressEvent
+from app.core.models import ConversionReport, ProgressEvent
+from app.gui.review_dialog import EpubReviewDialog
 from app.gui.workers.conversion_worker import ConversionWorker
 from app.pdf.reader import PdfReader
 
 LOGGER = logging.getLogger(__name__)
-_COMPLETION_SOUND_PATH = Path(__file__).resolve().parents[2] / "assets" / "ses.mp3"
+_COMPLETION_SOUND_PATHS = (
+    Path(__file__).resolve().parents[2] / "assets" / "ses.mp3",
+    Path(sys.prefix) / "share" / "pdf-to-epub" / "assets" / "ses.mp3",
+)
 
 
 class PdfDropZone(QFrame):
@@ -133,8 +137,10 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         self._settings = QSettings("PDFtoEPUB", "PDFtoEPUB")
         self._worker: ConversionWorker | None = None
+        self._close_when_worker_finishes = False
         self._input_path: Path | None = None
         self._last_output: Path | None = None
+        self._last_report: ConversionReport | None = None
         self._audio_output = QAudioOutput(self)
         self._completion_player = QMediaPlayer(self)
         self._completion_player.setAudioOutput(self._audio_output)
@@ -201,16 +207,21 @@ class MainWindow(QMainWindow):
         self.open_epub_button.setObjectName("openEpubButton")
         self.open_folder_button = QPushButton("Klasörü Aç")
         self.open_folder_button.setObjectName("openFolderButton")
+        self.review_button = QPushButton("Metni Gözden Geçir")
+        self.review_button.setObjectName("reviewButton")
         self.open_epub_button.setEnabled(False)
         self.open_folder_button.setEnabled(False)
+        self.review_button.setEnabled(False)
         self.open_epub_button.setVisible(False)
         self.open_folder_button.setVisible(False)
+        self.review_button.setVisible(False)
         self.cancel_button = QPushButton("İptal")
         self.cancel_button.setObjectName("cancelButton")
         self.cancel_button.setEnabled(False)
         self.cancel_button.setVisible(False)
         button_row.addWidget(self.open_epub_button)
         button_row.addWidget(self.open_folder_button)
+        button_row.addWidget(self.review_button)
         button_row.addStretch()
         button_row.addWidget(self.cancel_button)
         self.action_bar.setVisible(False)
@@ -219,6 +230,7 @@ class MainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self._cancel_conversion)
         self.open_epub_button.clicked.connect(self._open_epub)
         self.open_folder_button.clicked.connect(self._open_folder)
+        self.review_button.clicked.connect(self._review_epub)
 
     def _create_source_panel(self) -> QWidget:
         panel = QWidget()
@@ -236,9 +248,16 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: object) -> None:  # noqa: N802
         self._save_settings()
         if self._worker and self._worker.isRunning():
+            self._close_when_worker_finishes = True
             self._worker.cancel()
-            self._worker.wait(3000)
+            event.ignore()  # type: ignore[attr-defined]
+            return
         super().closeEvent(event)  # type: ignore[arg-type]
+
+    def _on_worker_finished(self) -> None:
+        if self._close_when_worker_finishes:
+            self._close_when_worker_finishes = False
+            self.close()
 
     def _set_input(self, path: Path) -> None:
         if self._worker and self._worker.isRunning():
@@ -260,14 +279,17 @@ class MainWindow(QMainWindow):
             return
         output_path = output_dir / _epub_filename(input_path)
         self._last_output = output_path
+        self._last_report = None
         self.progress_bar.setValue(0)
         self.log_panel.clear()
         self.log_title.setVisible(False)
         self.log_panel.setVisible(False)
         self.open_epub_button.setVisible(False)
         self.open_folder_button.setVisible(False)
+        self.review_button.setVisible(False)
         self.open_epub_button.setEnabled(False)
         self.open_folder_button.setEnabled(False)
+        self.review_button.setEnabled(False)
         self.progress_group.setVisible(True)
         self._set_running(True)
         self._append_log(f"Dönüştürme başlatılıyor: {input_path.name}")
@@ -277,6 +299,7 @@ class MainWindow(QMainWindow):
         self._worker.conversion_succeeded.connect(self._on_success)
         self._worker.conversion_failed.connect(self._on_failure)
         self._worker.conversion_cancelled.connect(self._on_cancelled)
+        self._worker.finished.connect(self._on_worker_finished)
         self._worker.start()
 
     def _options(self) -> ConversionOptions:
@@ -310,6 +333,8 @@ class MainWindow(QMainWindow):
                 self.progress_bar.setValue(100)
 
     def _on_success(self, report: object) -> None:
+        if self._close_when_worker_finishes:
+            return
         self._play_completion_sound()
         QTimer.singleShot(0, self._bring_to_front)
         self._set_running(False)
@@ -318,11 +343,28 @@ class MainWindow(QMainWindow):
         self.status_label.setText("EPUB başarıyla oluşturuldu.")
         self.open_epub_button.setEnabled(self._last_output is not None)
         self.open_folder_button.setEnabled(self._last_output is not None)
+        self.review_button.setEnabled(
+            self._input_path is not None and self._last_output is not None
+        )
         self.open_epub_button.setVisible(True)
         self.open_folder_button.setVisible(True)
+        self.review_button.setVisible(True)
         self.action_bar.setVisible(True)
         summary = report.summary() if hasattr(report, "summary") else ""
         self._append_log(summary)
+        if isinstance(report, ConversionReport):
+            self._last_report = report
+            for issue in report.issues:
+                self._append_log(f"KALİTE: {issue.display()}")
+            needs_review = any(
+                issue.code.startswith("low_ocr_confidence")
+                for issue in report.issues
+            )
+            if needs_review:
+                self.status_label.setText(
+                    "EPUB oluşturuldu; düşük güvenli OCR sayfalarını gözden geçirin."
+                )
+                QTimer.singleShot(100, self._review_epub)
 
     def _bring_to_front(self) -> None:
         if self.isMinimized():
@@ -342,7 +384,10 @@ class MainWindow(QMainWindow):
             LOGGER.debug("Could not bring the conversion window to the foreground", exc_info=True)
 
     def _play_completion_sound(self) -> None:
-        sound_path = _COMPLETION_SOUND_PATH
+        sound_path = next(
+            (path for path in _COMPLETION_SOUND_PATHS if path.is_file()),
+            _COMPLETION_SOUND_PATHS[0],
+        )
         if not sound_path.is_file():
             LOGGER.warning("Conversion completion sound not found: %s", sound_path)
             return
@@ -354,6 +399,8 @@ class MainWindow(QMainWindow):
         LOGGER.warning("Conversion completion sound could not be played: %s", error_string)
 
     def _on_failure(self, message: str) -> None:
+        if self._close_when_worker_finishes:
+            return
         self._set_running(False)
         self.status_label.setVisible(True)
         self.status_label.setText("Dönüştürme başarısız oldu.")
@@ -361,6 +408,8 @@ class MainWindow(QMainWindow):
         self._show_error(message)
 
     def _on_cancelled(self) -> None:
+        if self._close_when_worker_finishes:
+            return
         self._set_running(False)
         self.status_label.setVisible(True)
         self.status_label.setText("Dönüştürme iptal edildi.")
@@ -381,6 +430,26 @@ class MainWindow(QMainWindow):
     def _open_folder(self) -> None:
         if self._last_output:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._last_output.parent)))
+
+    def _review_epub(self) -> None:
+        if (
+            self._input_path is None
+            or self._last_output is None
+            or not self._input_path.is_file()
+            or not self._last_output.is_file()
+        ):
+            return
+        try:
+            dialog = EpubReviewDialog(
+                self._input_path,
+                self._last_output,
+                self._last_report,
+                self,
+            )
+        except (ConversionError, OSError, ValueError, RuntimeError) as error:
+            self._show_error(f"EPUB incelemesi açılamadı: {error}")
+            return
+        dialog.exec()
 
     def _append_log(self, message: str) -> None:
         self.log_title.setVisible(True)
@@ -470,6 +539,8 @@ QPushButton:pressed { background: #1f2b36; }
 QPushButton:disabled { background: #1b242d; color: #60717f; border-color: #27333f; }
 QPushButton#openEpubButton { background: #5bd6d2; color: #0d2227; border-color: #5bd6d2; font-weight: 800; }
 QPushButton#openEpubButton:hover { background: #79e3de; border-color: #79e3de; }
+QPushButton#reviewButton { background: #203947; border-color: #3dbec0; color: #c9f4f1; }
+QPushButton#reviewButton:hover { background: #294b59; }
 QPushButton#cancelButton { background: transparent; color: #9eb0bd; border-color: #334452; }
 QPushButton#cancelButton:hover { color: #e7f0f4; border-color: #718694; }
 """

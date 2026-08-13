@@ -25,6 +25,10 @@ class ConversionOptions:
     metadata: DocumentMetadata | None = None
     pdf_password: str | None = None
     debug_output_dir: Path | None = None
+    preserve_unreadable_pages: bool = True
+    minimum_ocr_confidence: float = 70.0
+    ocr_timeout_seconds: float = 120.0
+    run_epubcheck: bool = False
 
 
 @dataclass(frozen=True, slots=True)

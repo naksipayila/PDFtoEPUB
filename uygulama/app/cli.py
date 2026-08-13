@@ -32,6 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="keep the PDF text layer instead of using OCR",
     )
+    parser.add_argument(
+        "--ocr-language",
+        default="tur",
+        help="Tesseract language code or combination such as tur+eng (default: tur)",
+    )
+    parser.add_argument(
+        "--language",
+        default="tr",
+        help="EPUB publication language (default: tr)",
+    )
     image_group = parser.add_mutually_exclusive_group()
     image_group.add_argument(
         "--include-images", action="store_true", help="include images on text pages"
@@ -56,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--publisher")
     parser.add_argument("--subject")
     parser.add_argument("--debug-dir", type=Path, help="write raw parsed page blocks as JSON")
+    parser.add_argument(
+        "--epubcheck", action="store_true", help="run external epubcheck when installed"
+    )
     parser.add_argument("--verbose", action="store_true", help="show debug logging")
     return parser
 
@@ -70,7 +83,7 @@ def main(arguments: list[str] | None = None) -> int:
     configure_logging(output.parent / "pdf_to_epub.log", args.verbose)
     options = ConversionOptions(
         use_ocr=args.ocr,
-        ocr_language="tur",
+        ocr_language=args.ocr_language,
         include_images=args.include_images and not args.no_images,
         remove_page_numbers=not args.keep_page_numbers,
         remove_headers_footers=not args.keep_header_footer,
@@ -83,8 +96,10 @@ def main(arguments: list[str] | None = None) -> int:
             author=args.author or "",
             publisher=args.publisher or "",
             subject=args.subject or "",
+            language=args.language,
         ),
         debug_output_dir=args.debug_dir,
+        run_epubcheck=args.epubcheck,
     )
     try:
         report = PdfToEpubConverter().convert(args.input, output, options, _print_progress)
@@ -93,6 +108,8 @@ def main(arguments: list[str] | None = None) -> int:
         return 2
     print(f"\nEPUB successfully created: {output}")
     print(report.summary())
+    for warning in report.warnings:
+        print(f"- {warning}")
     return 0
 
 

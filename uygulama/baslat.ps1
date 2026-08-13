@@ -7,8 +7,10 @@ $requirements = Join-Path $projectRoot "runtime-requirements.txt"
 $pythonVersion = "3.12.10"
 $pythonPackageUrl = "https://api.nuget.org/v3-flatcontainer/python/$pythonVersion/python.$pythonVersion.nupkg"
 $tesseractInstallerUrl = "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
-$turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/main/tur.traineddata"
-$turkishDataVersion = "tessdata_best"
+$tessdataBestRevision = "e12c65a915945e4c28e237a9b52bc4a8f39a0cec"
+$turkishDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/$tessdataBestRevision/tur.traineddata"
+$osdDataUrl = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/$tessdataBestRevision/osd.traineddata"
+$turkishDataVersion = "tessdata_best-$tessdataBestRevision"
 $ProgressPreference = "Continue"
 
 Set-Location -LiteralPath $projectRoot
@@ -136,14 +138,6 @@ function Find-UsablePython {
             $candidates += $launcherPython.Trim()
         }
         try {
-            $launcherPython = & $pyCommand.Source -3.11 -c "import sys; print(sys.executable)" 2>$null
-        } catch {
-            $launcherPython = $null
-        }
-        if ($LASTEXITCODE -eq 0 -and $launcherPython) {
-            $candidates += $launcherPython.Trim()
-        }
-        try {
             $launcherPython = & $pyCommand.Source -3 -c "import sys; print(sys.executable)" 2>$null
         } catch {
             $launcherPython = $null
@@ -179,7 +173,7 @@ function Find-UsablePython {
     foreach ($candidate in $candidates | Select-Object -Unique) {
         if ($candidate -and (Test-Path -LiteralPath $candidate)) {
             $version = Get-PythonVersion $candidate
-            if ($version -and $version -ge [version]"3.11") {
+            if ($version -and $version -ge [version]"3.12") {
                 return $candidate
             }
         }
@@ -199,7 +193,7 @@ function Install-LocalPython {
     $localPython = Join-Path $pythonDirectory "python.exe"
     if (Test-Path -LiteralPath $pythonDirectory) {
         $existingVersion = Get-PythonVersion $localPython
-        if (-not ($existingVersion -and $existingVersion -ge [version]"3.11")) {
+        if (-not ($existingVersion -and $existingVersion -ge [version]"3.12")) {
             Remove-Item -LiteralPath $pythonDirectory -Recurse -Force
         }
     }
@@ -292,15 +286,18 @@ function Ensure-Tesseract {
     $localTesseractRoot = Join-Path $runtimeRoot "tesseract"
     $localTessdata = Join-Path $localTesseractRoot "tessdata"
     $turkishData = Join-Path $localTessdata "tur.traineddata"
+    $osdData = Join-Path $localTessdata "osd.traineddata"
     $turkishDataMarker = Join-Path $localTessdata "tur.model"
     $installedModelVersion = ""
     if (Test-Path -LiteralPath $turkishDataMarker) {
         $installedModelVersion = (Get-Content -LiteralPath $turkishDataMarker -Raw).Trim()
     }
-    if (-not (Test-Path -LiteralPath $turkishData) -or $installedModelVersion -ne $turkishDataVersion) {
+    if (-not (Test-Path -LiteralPath $turkishData) -or -not (Test-Path -LiteralPath $osdData) -or $installedModelVersion -ne $turkishDataVersion) {
         New-Item -ItemType Directory -Path $localTessdata -Force | Out-Null
         Write-Host "Turkce OCR verisi indiriliyor..."
         Download-WithProgress $turkishDataUrl $turkishData "Turkce OCR verisi indiriliyor"
+        Write-Host "OCR yon algilama verisi indiriliyor..."
+        Download-WithProgress $osdDataUrl $osdData "OCR yon algilama verisi indiriliyor"
         [IO.File]::WriteAllText($turkishDataMarker, $turkishDataVersion)
     }
     $env:TESSDATA_PREFIX = $localTessdata
@@ -314,6 +311,13 @@ if (-not $systemPython) {
 }
 
 $venvPython = Join-Path $venvRoot "Scripts\python.exe"
+if (Test-Path -LiteralPath $venvPython) {
+    $venvVersion = Get-PythonVersion $venvPython
+    if (-not ($venvVersion -and $venvVersion -ge [version]"3.12")) {
+        Write-Host "Eski Python sanal ortami yenileniyor..."
+        Remove-Item -LiteralPath $venvRoot -Recurse -Force
+    }
+}
 if (-not (Test-Path -LiteralPath $venvPython)) {
     Write-Host "Uygulama sanal ortami olusturuluyor..."
     Invoke-Checked $systemPython @("-m", "venv", $venvRoot)

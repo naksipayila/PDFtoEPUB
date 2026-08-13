@@ -8,6 +8,7 @@ import unicodedata
 _LIGATURES = str.maketrans({"ﬁ": "fi", "ﬂ": "fl", "ﬀ": "ff", "ﬃ": "ffi", "ﬄ": "ffl"})
 _CONTROL_CHARS = re.compile(r"[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]")
 _WHITESPACE = re.compile(r"[\t\r\n\u00a0\u2007\u202f ]+")
+_LANGUAGE_TAG = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$")
 
 
 def normalize_text(value: str, *, preserve_soft_hyphen: bool = False) -> str:
@@ -28,3 +29,8 @@ def join_line_text(previous: str, current: str) -> str:
     if previous.endswith("-") and current[:1].islower() and len(previous.rstrip("-").rstrip()) > 2:
         return normalize_text(previous[:-1].rstrip() + current, preserve_soft_hyphen=True)
     return normalize_text(f"{previous} {current}", preserve_soft_hyphen=True)
+
+
+def is_language_tag(value: str) -> bool:
+    """Accept well-formed, commonly used BCP 47 language-tag syntax."""
+    return bool(_LANGUAGE_TAG.fullmatch(value.strip()))

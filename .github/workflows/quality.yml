@@ -1,0 +1,84 @@
+name: Quality
+
+on:
+  push:
+  pull_request:
+
+defaults:
+  run:
+    working-directory: uygulama
+
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: uygulama/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest
+      - run: ruff check app tests
+      - name: GUI smoke test
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python run.py --smoke-test
+
+  epubcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: uygulama/requirements.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: python -m pip install -r requirements.txt
+      - name: Install pinned EPUBCheck
+        working-directory: .
+        run: |
+          mkdir -p .tools
+          curl -L --fail --retry 3 -o .tools/epubcheck.zip https://github.com/w3c/epubcheck/releases/download/v5.3.0/epubcheck-5.3.0.zip
+          echo "6c07e68584b2e2ce2f89fe06e1246dfead3eb36b46b340e7d93524f29dcff6c5  .tools/epubcheck.zip" | sha256sum --check
+          unzip -q .tools/epubcheck.zip -d .tools
+      - name: Validate generated EPUB
+        env:
+          EPUBCHECK_JAR: ${{ github.workspace }}/.tools/epubcheck-5.3.0/epubcheck.jar
+        run: python -m pytest tests/test_epubcheck.py -q
+
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build --wheel
+      - run: python -m pip install --force-reinstall (Get-ChildItem dist\*.whl).FullName
+      - run: pdf-to-epub --help
+      - run: python -c "import pathlib, sys; root=pathlib.Path(sys.prefix)/'share'/'pdf-to-epub'/'assets'; assert (root/'pdf-to-epub.ico').is_file(); assert (root/'ses.mp3').is_file()"
+
+  reader-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: uygulama/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y calibre
+        working-directory: .
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest tests/test_reader_compatibility.py -q

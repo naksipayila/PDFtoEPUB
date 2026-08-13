@@ -20,6 +20,9 @@ dev = ["pytest>=8.2", "ruff>=0.5"]
 [project.scripts]
 pdf-to-epub = "app.cli:main"
 
+[project.gui-scripts]
+pdf-to-epub-gui = "app.main:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
@@ -35,3 +38,6 @@ ignore = ["E501", "UP040"]
 
 [tool.setuptools]
 packages = ["app", "app.core", "app.pdf", "app.layout", "app.epub", "app.ocr", "app.gui", "app.gui.workers"]
+
+[tool.setuptools.data-files]
+"share/pdf-to-epub/assets" = ["assets/pdf-to-epub.ico", "assets/ses.mp3"]

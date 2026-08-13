@@ -44,7 +44,24 @@ def test_merges_a_word_continuation_across_adjacent_pages() -> None:
     assert [element.text for element in merged] == [
         "yakın çevrede öyleymiş. Çocuk devam etti."
     ]
-    assert merged[0].page_number == 10
+    assert merged[0].page_number == 9
+    assert merged[0].source_pages == (9, 10)
+
+
+def test_merges_a_paragraph_across_three_adjacent_pages() -> None:
+    elements = [
+        Paragraph("Üç sayfaya yayılan", BoundingBox(4, 700, 250, 712), 9),
+        Paragraph("metnin orta bölümü", BoundingBox(5, 30, 250, 42), 10),
+        Paragraph("ve son bölümü.", BoundingBox(5, 30, 250, 42), 11),
+    ]
+
+    merged, count = merge_page_continuations(elements, {9: 255, 10: 255, 11: 255})
+
+    assert count == 2
+    assert [element.text for element in merged] == [
+        "Üç sayfaya yayılan metnin orta bölümü ve son bölümü."
+    ]
+    assert merged[0].source_pages == (9, 10, 11)
 
 
 def test_keeps_sentence_ended_page_paragraphs_separate() -> None:

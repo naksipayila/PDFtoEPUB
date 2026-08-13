@@ -15,7 +15,10 @@ from app.core.logging import configure_logging
 from app.gui.main_window import MainWindow
 
 _WINDOWS_APP_USER_MODEL_ID = "PDFtoEPUB.PDFtoEPUB"
-_ICON_PATH = Path(__file__).resolve().parents[1] / "assets" / "pdf-to-epub.ico"
+_ICON_PATHS = (
+    Path(__file__).resolve().parents[1] / "assets" / "pdf-to-epub.ico",
+    Path(sys.prefix) / "share" / "pdf-to-epub" / "assets" / "pdf-to-epub.ico",
+)
 
 
 def _set_windows_app_user_model_id() -> None:
@@ -40,7 +43,8 @@ def main() -> int:
     application.setApplicationName("PDF to EPUB")
     application.setOrganizationName("PDFtoEPUB")
     application.setStyle(QStyleFactory.create("Fusion"))
-    application_icon = QIcon(str(_ICON_PATH))
+    icon_path = next((path for path in _ICON_PATHS if path.is_file()), _ICON_PATHS[0])
+    application_icon = QIcon(str(icon_path))
     if not application_icon.isNull():
         application.setWindowIcon(application_icon)
     window = MainWindow()
